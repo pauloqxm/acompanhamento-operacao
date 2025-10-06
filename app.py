@@ -21,18 +21,18 @@ from branca.element import IFrame  # popups HTML
 # Config geral
 # =========================
 st.set_page_config(
-    page_title="Perenização de Rios • Vazões", 
+    page_title="Perenização de Rios • Vazões",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# Esconder a barra lateral e header
+# Esconde sidebar/header (visual limpo)
 st.markdown("""
     <style>
         .css-1d391kg {display: none;}
         section[data-testid="stSidebar"] {display: none;}
         .css-1lcbmhc {display: none;}
-        header {visibility: hidden;} 
+        header {visibility: hidden;}
         .css-1rs6os {visibility: hidden;}
         .css-17ziqus {visibility: hidden;}
     </style>
@@ -40,8 +40,17 @@ st.markdown("""
 
 TZ = ZoneInfo("America/Fortaleza")
 
-# Ícone personalizado dos pontos
+# =========================
+# Parâmetros FIXOS (sem controles)
+# =========================
 ICON_URL = "https://i.ibb.co/kgbmmjWc/location-icon-242304.png"
+USE_ICON = True
+ICON_W, ICON_H = 32, 24
+
+POPUP_WIDTH = 360
+POPUP_HEIGHT = 300
+
+MAP_HEIGHT = 520
 
 # =========================
 # Utilidades
@@ -240,7 +249,6 @@ def make_popup_html(row, cols):
             if k == "vazao":
                 try:
                     vazao_f = float(str(value).replace(',', '.'))
-                    # Formatação brasileira com unidade L/s
                     formatted_vazao = f'{vazao_f:,.2f} L/s'.replace('.', '#').replace(',', '.').replace('#', ',')
                     value = f'<span style="color:#FF5733;font-weight:700;font-size:1.2em;">{formatted_vazao}</span>'
                 except ValueError:
@@ -295,7 +303,7 @@ def load_geojson_safe(*candidates):
 
 def geojson_bounds(gj: dict):
     """Bounds [[min_lat,min_lon],[max_lat,max_lon]] de um GeoJSON."""
-    if not gj: 
+    if not gj:
         return None
 
     def walk_coords(coords):
@@ -318,7 +326,7 @@ def geojson_bounds(gj: dict):
     max_lon, max_lat = -180.0, -90.0
 
     for geom in geoms:
-        if not geom: 
+        if not geom:
             continue
         coords = geom.get("coordinates")
         if coords is None:
@@ -353,7 +361,7 @@ def main():
             <p style="margin:0.5rem 0 0 0;font-size:1.2rem;opacity: 0.9;">Perenização de Rios • Sistema de Análise de Dados</p>
         </div>
     """, unsafe_allow_html=True)
-    
+
     st.caption(f"🕐 Última atualização dos dados: {datetime.now(TZ).strftime('%d/%m/%Y %H:%M:%S')} — Fuso America/Fortaleza")
 
     # Google Sheets
@@ -410,7 +418,7 @@ def main():
             camp = st.multiselect("**Campanha**", options_for("campanha"))
         with col4:
             rese = st.multiselect("**Reservatório/Sistema**", options_for("reservatorio"))
-        
+
         secao_opts = options_for("secao")
         sec_sel = st.multiselect("**Seção**", secao_opts)
 
@@ -466,7 +474,7 @@ def main():
                 cols.get("campanha",""): "Campanha",
                 cols.get("reservatorio",""): "Reservatório/Sistema",
                 cols.get("secao",""): "Seção",
-                cols.get("vazao",""): "Vazão (L/s)",  # <-- unidade
+                cols.get("vazao",""): "Vazão (L/s)",
                 cols.get("obs",""): "Observações",
             }
             st.dataframe(
@@ -502,7 +510,7 @@ def main():
 
             for _, row in fdf.iterrows():
                 cell = row.get(cname)
-                if not isinstance(cell, str): 
+                if not isinstance(cell, str):
                     continue
 
                 rlab = row.get(cols.get("reservatorio",""))
@@ -541,26 +549,9 @@ def main():
     st.markdown("---")
     st.subheader("🗺️ Mapa das Seções Monitoradas")
 
-    # Ajustes do popup e ícone (sem AUTO)
-    with st.container():
-        c1, c2, c3 = st.columns([1,1,1])
-        with c1:
-            popup_width = st.slider("Largura do popup (px)", 260, 520, 360, 10)
-        with c2:
-            popup_height = st.slider("Altura do popup (px)", 160, 600, 300, 10)
-        with c3:
-            use_icon = st.checkbox("Usar ícone nos pontos", value=True)
-    with st.container():
-        c5, c6 = st.columns([1,1])
-        with c5:
-            icon_w = st.slider("Tamanho do ícone (px)", 16, 64, 32, 2, disabled=not use_icon)
-        with c6:
-            icon_h = st.slider("Altura do ícone (px)", 16, 64, 32, 2, disabled=not use_icon)
-
-    map_height = 520
     fmap = folium.Map(location=[-5.199, -39.292], zoom_start=8, control_scale=True, prefer_canvas=True, tiles=None)
 
-    # Camadas base
+    # Bases
     folium.TileLayer("CartoDB Positron", name="🗺️ CartoDB Positron").add_to(fmap)
     folium.TileLayer("OpenStreetMap", name="🌍 OpenStreetMap").add_to(fmap)
     folium.TileLayer(
@@ -574,7 +565,7 @@ def main():
         attr="Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community"
     ).add_to(fmap)
 
-    # FeatureGroups
+    # Grupos
     fg_bacia   = folium.FeatureGroup(name="🏞️ Bacia do Banabuiú", show=True)
     fg_trechos = folium.FeatureGroup(name="🌊 Trechos Perene", show=True)
     fg_pontos  = folium.FeatureGroup(name="📍 Pontos de Medição", show=True)
@@ -601,7 +592,7 @@ def main():
         fg_bacia.add_to(fmap)
         bacia_bounds = geojson_bounds(bacia)
 
-    # Pontos de medição
+    # Pontos
     lat_col = cols.get("lat")
     lon_col = cols.get("lon")
     pts = []
@@ -619,14 +610,14 @@ def main():
                 continue
 
             popup_html = make_popup_html(row, cols)
-            iframe = IFrame(html=popup_html, width=popup_width, height=popup_height)
-            popup = folium.Popup(iframe, max_width=popup_width)
+            iframe = IFrame(html=popup_html, width=POPUP_WIDTH, height=POPUP_HEIGHT)
+            popup = folium.Popup(iframe, max_width=POPUP_WIDTH)
 
-            if use_icon:
+            if USE_ICON:
                 icon = CustomIcon(
                     icon_image=ICON_URL,
-                    icon_size=(icon_w, icon_h),
-                    icon_anchor=(icon_w // 2, icon_h)
+                    icon_size=(ICON_W, ICON_H),
+                    icon_anchor=(ICON_W // 2, ICON_H)
                 )
                 folium.Marker(
                     location=[lat, lon],
@@ -655,30 +646,30 @@ def main():
                          [max(p[0] for p in pts), max(p[1] for p in pts)]])
 
     LayerControl(collapsed=True, position="topright").add_to(fmap)
-    st_folium(fmap, height=map_height, use_container_width=True)
+    st_folium(fmap, height=MAP_HEIGHT, use_container_width=True)
 
     # =========================
     # GRÁFICOS
     # =========================
     st.markdown("---")
     st.subheader("📈 Análises Gráficas")
-    
+
     if cols.get("data") and cols.get("secao") and cols.get("vazao"):
         gdf = fdf[[cols["data"], cols["secao"], cols["vazao"]]].dropna()
         gdf[cols["vazao"]] = pd.to_numeric(gdf[cols["vazao"]].astype(str).str.replace(",", "."), errors="coerce")
         gdf = gdf.dropna(subset=[cols["vazao"]])
 
-        # 📈 Vazão ao Longo do Tempo (eixo de tempo só com meses; unidade L/s)
+        # Vazão ao longo do tempo (mês) — L/s
         st.markdown("**📈 Vazão ao Longo do Tempo**")
         line = alt.Chart(gdf).mark_line(point=True, strokeWidth=3).encode(
             x=alt.X(
                 f"{cols['data']}:T",
                 title="Mês",
-                axis=alt.Axis(format="%b", labelAngle=0),      # apenas mês (Jan, Feb, ...)
-                scale=alt.Scale(nice='month')                  # ticks mensais
+                axis=alt.Axis(format="%b", labelAngle=0),
+                scale=alt.Scale(nice='month')
             ),
             y=alt.Y(f"{cols['vazao']}:Q", title="Vazão medida (L/s)"),
-            color=alt.Color(f"{cols['secao']}:N", title="Seção", scale=alt.Scale(scheme='set1')), 
+            color=alt.Color(f"{cols['secao']}:N", title="Seção", scale=alt.Scale(scheme='set1')),
             tooltip=[
                 alt.Tooltip(cols["data"], title="Data", format="%Y-%m-%d"),
                 alt.Tooltip(cols["secao"], title="Seção"),
@@ -687,7 +678,7 @@ def main():
         ).properties(width="container", height=400).interactive()
         st.altair_chart(line, use_container_width=True)
 
-        # 📊 Boxplot (unidade L/s)
+        # Boxplot — L/s
         st.markdown("**📊 Distribuição de Vazão por Seção**")
         box = alt.Chart(gdf).mark_boxplot(size=30, opacity=0.8).encode(
             x=alt.X(f"{cols['secao']}:N", title="Seção", axis=alt.Axis(labelAngle=-45)),
