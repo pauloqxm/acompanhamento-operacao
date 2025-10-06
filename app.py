@@ -433,15 +433,10 @@ def main():
     fmap = folium.Map(location=[-5.199, -39.292], zoom_start=8, control_scale=True, prefer_canvas=True)
 
     # Tiles (bases) com attribution
-    folium.TileLayer("OpenStreetMap", name="OpenStreetMap").add_to(fmap)
     folium.TileLayer("CartoDB Positron", name="CartoDB Positron").add_to(fmap)
     folium.TileLayer("CartoDB Dark_Matter", name="CartoDB Dark Matter").add_to(fmap)
-    folium.TileLayer(
-        tiles="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
-        name="OpenTopoMap",
-        attr="Map data © OpenStreetMap contributors, SRTM | Map style © OpenTopoMap (CC-BY-SA)"
-    ).add_to(fmap)
-
+    folium.TileLayer("OpenStreetMap", name="OpenStreetMap").add_to(fmap)
+  
     # FeatureGroups para poder ligar/desligar
     fg_bacia   = folium.FeatureGroup(name="Bacia do Banabuiú", show=True)
     fg_trechos = folium.FeatureGroup(name="Trechos Perene", show=True)
