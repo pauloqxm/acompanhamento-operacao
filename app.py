@@ -18,26 +18,7 @@ import streamlit.components.v1 as components
 # =========================
 # Config geral
 # =========================
-st.set_page_config(
-    page_title="Perenização de Rios • Vazões", 
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
-
-# Esconder a barra lateral completamente
-st.markdown("""
-    <style>
-        /* Esconde a barra lateral (se por acaso for ativada) */
-        .css-1d391kg {display: none;}
-        section[data-testid="stSidebar"] {display: none;}
-        .css-1lcbmhc {display: none;}
-        /* Esconde o menu de opções do Streamlit (hambúrguer) e o header */
-        header {visibility: hidden;} 
-        .css-1rs6os {visibility: hidden;}
-        .css-17ziqus {visibility: hidden;}
-    </style>
-""", unsafe_allow_html=True)
-
+st.set_page_config(page_title="Perenização de Rios • Vazões", layout="wide")
 TZ = ZoneInfo("America/Fortaleza")
 
 # =========================
@@ -160,17 +141,7 @@ def render_lightgallery_mixed(items: list, height_px=440):
     <style>
       .lg-backdrop {{ background: rgba(0,0,0,0.9); }}
       .gallery-container {{ display:flex; flex-wrap: wrap; gap: 12px; align-items:flex-start; }}
-      .gallery-item img {{ 
-          height: 140px; 
-          width: auto; 
-          border-radius: 10px; 
-          box-shadow: 0 4px 12px rgba(0,0,0,.2);
-          transition: transform 0.3s ease, box-shadow 0.3s ease;
-      }}
-      .gallery-item:hover img {{
-          transform: scale(1.05);
-          box-shadow: 0 6px 16px rgba(0,0,0,.3);
-      }}
+      .gallery-item img {{ height: 140px; width: auto; border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,.15); }}
     </style>
 
     <div id="lg-mixed" class="gallery-container">{items_html}</div>
@@ -197,127 +168,20 @@ def render_lightgallery_mixed(items: list, height_px=440):
     """
     components.html(html, height=height_px, scrolling=True)
 
-# =========================================================================================
-# FUNÇÃO DE POPUP OTIMIZADA (Visual e Formatação)
-# =========================================================================================
 def make_popup_html(row, cols):
-    # Função segura para valores nulos
     safe = lambda x: "-" if (x is None or (isinstance(x,float) and math.isnan(x))) else str(x)
-    
     labels = {
-        "data": "Data da Medição",
         "campanha": "Campanha",
         "reservatorio": "Reservatório/Sistema",
         "secao": "Seção",
         "vazao": "Vazão medida",
     }
-    icons = {
-        "data": "📅",
-        "campanha": "🏷️",
-        "reservatorio": "💧",
-        "secao": "📍",
-        "vazao": "🌊",
-    }
-    
-    # 1. Tenta obter e formatar a data
-    date_col = cols.get("data")
-    data_part = ''
-    if date_col and date_col in row and pd.notna(row[date_col]):
-        try:
-            # Assumindo que a coluna já é datetime (tratada no main)
-            data_medicao = row[date_col].strftime('%d/%m/%Y')
-            data_part = f'''
-                <div style="display: flex; justify-content: space-between; padding-bottom: 5px; font-size: 0.9em; border-bottom: 1px solid rgba(255, 255, 255, 0.3);">
-                    <span>{icons["data"]} {labels["data"]}:</span>
-                    <span style="font-weight: bold; color: #f1c40f;">{data_medicao}</span>
-                </div>
-                <div style="height: 1px; background-color: rgba(255, 255, 255, 0.2); margin: 6px 0;"></div>
-            '''
-        except:
-             pass 
-        
-    
-    # 2. Monta as partes do corpo do popup
     parts = []
-    
-    # Ordem de exibição dos campos
     for k in ["campanha", "reservatorio", "secao", "vazao"]:
         colname = cols.get(k)
         if colname and colname in row and pd.notna(row[colname]):
-            value = safe(row[colname])
-            label = labels[k]
-            icon = icons[k]
-            
-            if k == "vazao":
-                try:
-                    # Tenta formatar a vazão para 2 casas decimais e adiciona unidade
-                    vazao_f = float(str(value).replace(',', '.'))
-                    # Formatação brasileira: 1.000,00 m³/s
-                    formatted_vazao = f'{vazao_f:,.2f} m³/s'.replace('.', '#').replace(',', '.').replace('#', ',')
-                    # Estilização especial para Vazão
-                    value = f'<span style="color: #FF5733; font-weight: 700; font-size: 1.2em;">{formatted_vazao}</span>'
-                except ValueError:
-                    # Mantém o valor original se não puder converter
-                    value = f'<span style="color: #FF5733; font-weight: 700;">{value}</span>'
-            
-            # Estrutura do item do popup
-            parts.append(f'''
-                <div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 0.95em;">
-                    <span style="font-weight: 500;">{icon} {label}:</span>
-                    <span style="font-weight: bold; text-align: right;">{value}</span>
-                </div>
-            ''')
-    
-    # Junta as partes
-    content_html = '\n'.join(parts)
-
-    popup_html = f"""
-    <div style="
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        padding: 15px;
-        min-width: 250px;
-        max-width: 350px;
-        background: linear-gradient(135deg, #1abc9c 0%, #3498db 100%); /* Gradiente turquesa/azul */
-        border-radius: 15px;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-        color: white;
-        border: 3px solid rgba(255,255,255,0.2);
-    ">
-        <div style="
-            background: rgba(255,255,255,0.15); 
-            padding: 10px 15px; 
-            border-radius: 10px; 
-            margin-bottom: 15px;
-            text-align: center;
-            font-size: 1.1em;
-            font-weight: bold;
-            letter-spacing: 0.5px;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
-        ">
-            Informações da Medição
-        </div>
-        
-        {data_part}
-        
-        {content_html}
-        
-        <div style="
-            margin-top: 15px;
-            padding: 8px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 8px;
-            text-align: center;
-            font-size: 0.8em;
-            opacity: 0.9;
-            font-style: italic;
-        ">
-            Clique no marcador para abrir a galeria de mídias!
-        </div>
-    </div>
-    """
-    return popup_html
-
-# =========================================================================================
+            parts.append(f"<b>{labels[k]}:</b> {safe(row[colname])}")
+    return "<br>".join(parts)
 
 def load_geojson_safe(*candidates):
     for path in candidates:
@@ -330,16 +194,12 @@ def load_geojson_safe(*candidates):
     return None
 
 def geojson_bounds(gj: dict):
-    """
-    Calcula bounds [ [min_lat,min_lon], [max_lat,max_lon] ] de um GeoJSON.
-    """
+    """Bounds [[min_lat,min_lon],[max_lat,max_lon]] de um GeoJSON."""
     if not gj: 
         return None
 
     def walk_coords(coords):
-        # retorna lista de (lon, lat)
         if isinstance(coords, (list, tuple)) and coords and isinstance(coords[0], (int, float)):
-            # coord única [lon, lat, ...]
             return [(coords[0], coords[1])]
         result = []
         for c in coords:
@@ -371,7 +231,7 @@ def geojson_bounds(gj: dict):
 
     if min_lon == 180.0:
         return None
-    return [[min_lat, min_lon], [max_lat, max_lon]]  # folium usa [lat, lon]
+    return [[min_lat, min_lon], [max_lat, max_lon]]
 
 # Caminhos possíveis (local e /mnt/data/)
 TRECHOS_CAND = ["trechos_perene.geojson", "/mnt/data/trechos_perene.geojson"]
@@ -382,37 +242,30 @@ BACIA_CAND   = ["bacia_banabuiu.geojson", "/mnt/data/bacia_banabuiu.geojson",
 # App
 # =========================
 def main():
-    # Header moderno
-    st.markdown("""
-        <div style="
-            background: linear-gradient(135deg, #0f4c75 0%, #3282b8 100%); /* Cor azul escuro/claro mais profissional */
-            padding: 2rem;
-            border-radius: 0 0 20px 20px;
-            margin: -1rem -1rem 2rem -1rem;
-            color: white;
-            text-align: center;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-        ">
-            <h1 style="margin:0; font-size: 2.5rem; font-weight: 700;">🌊 Monitoramento de Vazões</h1>
-            <p style="margin:0.5rem 0 0 0; font-size: 1.2rem; opacity: 0.9;">Perenização de Rios • Sistema de Análise de Dados</p>
-        </div>
-    """, unsafe_allow_html=True)
-    
-    st.caption(f"🕐 Última atualização dos dados: {datetime.now(TZ).strftime('%d/%m/%Y %H:%M:%S')} — Fuso America/Fortaleza")
+    st.title("Monitoramento de Vazões e Perenização de Rios")
+    st.caption(f"Atualizado em {datetime.now(TZ).strftime('%d/%m/%Y %H:%M:%S')} — Fuso America/Fortaleza")
 
-    # Carregamento automático do Google Sheets (configuração simplificada)
-    SHEET_ID = "1YstNFY5ehrOUjg_AoSztcqq466uRwstKY7gpvs0BWnI"
-    GID = "0"
-    SEP = ","
+    # Carregamento automático do Google Sheets
+    with st.sidebar:
+        st.header("Fonte de dados")
+        st.write("Carregando automaticamente do Google Sheets.")
+        sheet_id = st.text_input("Sheet ID", value="1YstNFY5ehrOUjg_AoSztcqq466uRwstKY7gpvs0BWnI")
+        gid = st.text_input("GID", value="0")
+        sep = st.selectbox("Separador (Sheets → CSV)", options=[",",";"], index=0)
+
+        st.divider()
+        st.subheader("Camadas de mapa (arquivos locais)")
+        st.write(f"trechos_perene.geojson: {'✅' if load_geojson_safe(*TRECHOS_CAND) else '❌ não encontrado'}")
+        st.write(f"bacia_banabuiu.geojson: {'✅' if load_geojson_safe(*BACIA_CAND) else '❌ não encontrado'}")
 
     try:
-        df = load_from_gsheet_csv(SHEET_ID, GID, sep=SEP)
+        df = load_from_gsheet_csv(sheet_id, gid, sep=sep)
     except Exception as e:
-        st.error(f"❌ Erro ao carregar do Google Sheets: {e}")
+        st.error(f"Erro ao carregar do Sheets: {e}")
         return
 
     if df.empty:
-        st.info("📭 Sem dados. Verifique permissões do Sheets e o GID informado.")
+        st.info("Sem dados. Verifique permissões do Sheets e o GID informado.")
         return
 
     # Normaliza nulos e descobre colunas
@@ -426,92 +279,64 @@ def main():
     # =========================
     # FILTROS
     # =========================
-    st.markdown("---")
-    st.subheader("🔍 Filtros de Dados")
+    st.subheader("Filtros")
 
-    # Container moderno para filtros
-    with st.container():
-        if cols.get("data"):
-            valid_dates = pd.to_datetime(df[cols["data"]]).dropna()
-            min_d = valid_dates.min() if not valid_dates.empty else date.today()
-            max_d = valid_dates.max() if not valid_dates.empty else date.today()
+    if cols.get("data"):
+        min_d = pd.to_datetime(df[cols["data"]]).min()
+        max_d = pd.to_datetime(df[cols["data"]]).max()
+        c1, c2, c3, c4, c5 = st.columns(5)
+        with c1:
+            data_ini = st.date_input("Data inicial", value=min_d.date() if pd.notna(min_d) else date.today())
+        with c2:
+            data_fim = st.date_input("Data final", value=max_d.date() if pd.notna(max_d) else date.today())
+    else:
+        c1, c2, c3, c4, c5 = st.columns(5)
+        data_ini = data_fim = None
+        st.warning("Coluna de **Data** não identificada automaticamente.", icon="⚠️")
 
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                data_ini = st.date_input("**Data inicial**", 
-                                        value=min_d.date() if pd.notna(min_d) else date.today(),
-                                        help="Data inicial do período")
-            with col2:
-                data_fim = st.date_input("**Data final**", 
-                                        value=max_d.date() if pd.notna(max_d) else date.today(),
-                                        help="Data final do período")
-        else:
-            col1, col2, col3, col4 = st.columns(4)
-            data_ini = data_fim = None
-            st.warning("⚠️ Coluna de **Data** não identificada automaticamente.")
+    def options_for(colkey):
+        cname = cols.get(colkey)
+        if not cname or not cname in df.columns:
+            return []
+        vals = sorted({v for v in df[cname].dropna().tolist()})
+        return vals
 
-        def options_for(colkey):
-            cname = cols.get(colkey)
-            if not cname or cname not in df.columns:
-                return []
-            vals = sorted({v for v in df[cname].dropna().astype(str).tolist()})
-            return vals
+    with c3:
+        resp = st.multiselect("Responsável", options_for("responsavel"))
+    with c4:
+        camp = st.multiselect("Campanha", options_for("campanha"))
+    with c5:
+        rese = st.multiselect("Reservatório/Sistema", options_for("reservatorio"))
+    secao_opts = options_for("secao")
+    sec_sel = st.multiselect("Seção", secao_opts)
 
-        with col3:
-            camp = st.multiselect("**Campanha**", options_for("campanha"), help="Filtrar por campanha")
-        with col4:
-            rese = st.multiselect("**Reservatório/Sistema**", options_for("reservatorio"), help="Filtrar por reservatório")
-        
-        secao_opts = options_for("secao")
-        sec_sel = st.multiselect("**Seção**", secao_opts, help="Filtrar por seção específica")
-
-    # Aplicar filtros
     fdf = df.copy()
     if cols.get("data") and (data_ini and data_fim):
-        # Garante que a coluna de data é comparável, lidando com NaT
-        date_series = pd.to_datetime(fdf[cols["data"]], errors='coerce')
-        mask = (date_series.dt.date >= data_ini) & (date_series.dt.date <= data_fim)
+        mask = (fdf[cols["data"]].dt.date >= data_ini) & (fdf[cols["data"]].dt.date <= data_fim)
         fdf = fdf.loc[mask]
 
     def filt_in(colkey, selected):
         cname = cols.get(colkey)
         if not cname or not selected:
             return
-        # Garante que a coluna está no tipo string antes de filtrar
         fdf.loc[:, cname] = fdf[cname].astype(str)
         sel = set(map(str, selected))
         return fdf[cname].isin(sel)
 
-    for key, selected in [("campanha", camp), ("reservatorio", rese), ("secao", sec_sel)]:
+    for key, selected in [("responsavel", resp), ("campanha", camp), ("reservatorio", rese), ("secao", sec_sel)]:
         flt = filt_in(key, selected)
         if flt is not None:
             fdf = fdf.loc[flt]
 
-    # Badge de resultado
-    st.markdown(f"""
-        <div style="
-            background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%); /* Verde de sucesso */
-            color: white;
-            padding: 0.5rem 1rem;
-            border-radius: 20px;
-            display: inline-block;
-            margin: 0.5rem 0;
-            font-weight: bold;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        ">
-            📈 Registros após filtros: <strong>{len(fdf)}</strong>
-        </div>
-    """, unsafe_allow_html=True)
+    st.success(f"Registros após filtros: **{len(fdf)}**")
 
     # =========================
     # TABELA + MÍDIAS (seletor)
     # =========================
-    st.markdown("---")
-    st.subheader("📋 Dados e Mídias")
+    st.subheader("Registros e Mídias")
     col_tab, col_media = st.columns([1, 1])
 
     with col_tab:
-        st.markdown("**📊 Tabela de Registros**")
         table_cols = [
             cols.get("campanha"),
             cols.get("reservatorio"),
@@ -533,22 +358,22 @@ def main():
                 height=420
             )
         else:
-            st.warning("⚠️ Não encontrei as colunas necessárias para a tabela solicitada.")
+            st.warning("Não encontrei as colunas necessárias para a tabela solicitada.", icon="⚠️")
 
     with col_media:
-        st.markdown("**🖼️ Galeria de Mídias**")
+        st.markdown("**Mídias**")
 
         media_map = {
-            "Foto Principal": cols.get("foto1"),
-            "Foto (02)":     cols.get("foto2"),
-            "Foto (03)L":    cols.get("foto3"),
-            "Video do Local": cols.get("video"),
+            "Foto do local_URL": cols.get("foto1"),
+            "Foto (02)_URL":    cols.get("foto2"),
+            "Foto (03)_URL":    cols.get("foto3"),
+            "Video do Local_URL": cols.get("video"),
         }
         valid_options = [label for label, cname in media_map.items() if cname and cname in fdf.columns]
         if not valid_options:
-            st.info("📭 Nenhuma coluna de mídia encontrada na base.")
+            st.info("Nenhuma coluna de mídia encontrada na base.")
         else:
-            choice = st.selectbox("**Selecione o tipo de mídia**", valid_options, index=0)
+            choice = st.selectbox("Escolha o que exibir", valid_options, index=0)
 
             def split_urls(cell: str):
                 parts = re.split(r"[,\n; ]+", cell.strip())
@@ -590,35 +415,39 @@ def main():
                             items.append({"thumb": u, "src": u, "caption": caption, "iframe": False})
 
             if items:
-                render_lightgallery_mixed(items, height_px=340)
+                render_lightgallery_mixed(items, height_px=420)
             else:
-                st.info("📭 Sem mídias para exibir nessa coluna. Verifique se os links apontam para arquivos do Drive (não pastas) e se estão compartilhados como 'qualquer pessoa com o link'.")
+                st.info("Sem mídias para exibir nessa coluna. Verifique se os links apontam para arquivos do Drive (não pastas) e se estão compartilhados como 'qualquer pessoa com o link'.")
 
     # =========================
     # MAPA — Folium (wide)
     # =========================
-    st.markdown("---")
-    st.subheader("🗺️ Mapa das Seções Monitoradas")
+    st.subheader("Mapa das seções monitoradas")
     map_height = 520
 
-    # Mapa base com estilo moderno
-    fmap = folium.Map(
-        location=[-5.199, -39.292], 
-        zoom_start=8, 
-        control_scale=True, 
-        prefer_canvas=True,
-        tiles='CartoDB Positron' 
-    )
+    # Mapa base (sem fit ainda)
+    fmap = folium.Map(location=[-5.199, -39.292], zoom_start=8, control_scale=True, prefer_canvas=True)
 
     # Tiles (bases) com attribution
-    folium.TileLayer("CartoDB Positron", name="🗺️ CartoDB Positron").add_to(fmap)
-    folium.TileLayer("Stamen Terrain", name="⛰️ Stamen Terrain").add_to(fmap) 
-    folium.TileLayer("OpenStreetMap", name="🌍 OpenStreetMap").add_to(fmap)
-    
-    # FeatureGroups para poder ligar/desligar
-    fg_bacia   = folium.FeatureGroup(name="🏞️ Bacia do Banabuiú", show=True)
-    fg_trechos = folium.FeatureGroup(name="🌊 Trechos Perene", show=True)
-    fg_pontos  = folium.FeatureGroup(name="📍 Pontos de Medição", show=True)
+    folium.TileLayer("OpenStreetMap", name="OpenStreetMap").add_to(fmap)
+    folium.TileLayer("CartoDB Positron", name="CartoDB Positron").add_to(fmap)
+    folium.TileLayer("CartoDB Dark_Matter", name="CartoDB Dark Matter").add_to(fmap)
+    folium.TileLayer(
+        tiles="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
+        name="OpenTopoMap",
+        attr="Map data © OpenStreetMap contributors, SRTM | Map style © OpenTopoMap (CC-BY-SA)"
+    ).add_to(fmap)
+    # 🛰️ Imagem de satélite (Esri)
+    folium.TileLayer(
+        tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        name="🛰️ Esri World Imagery",
+        attr="Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community"
+    ).add_to(fmap)
+
+    # FeatureGroups para ligar/desligar
+    fg_bacia   = folium.FeatureGroup(name="Bacia do Banabuiú", show=True)
+    fg_trechos = folium.FeatureGroup(name="Trechos Perene", show=True)
+    fg_pontos  = folium.FeatureGroup(name="Pontos de Medição", show=True)
 
     # GeoJSON camadas
     trechos = load_geojson_safe(*TRECHOS_CAND)
@@ -628,33 +457,26 @@ def main():
         GeoJson(
             trechos,
             name="Trechos Perene",
-            style_function=lambda x: {
-                "color": "#3498db",
-                "weight": 4,
-                "opacity": 0.9,
-                "dashArray": "5, 5"
-            },
+            style_function=lambda x: {"color":"#1f78b4","weight":3,"opacity":0.9},
             tooltip=GeoJsonTooltip(fields=[], aliases=[], sticky=False)
         ).add_to(fg_trechos)
         fg_trechos.add_to(fmap)
+    else:
+        st.info("Camada 'trechos_perene.geojson' não encontrada.")
 
     bacia_bounds = None
     if bacia:
         GeoJson(
             bacia,
             name="Bacia do Banabuiú",
-            style_function=lambda x: {
-                "color": "#27ae60",
-                "weight": 3,
-                "opacity": 0.8, 
-                "fillOpacity": 0.05,
-                "fillColor": "#27ae60"
-            }
+            style_function=lambda x: {"color":"#33a02c","weight":2,"opacity":0.8, "fillOpacity":0.05}
         ).add_to(fg_bacia)
         fg_bacia.add_to(fmap)
         bacia_bounds = geojson_bounds(bacia)
+    else:
+        st.info("Camada 'bacia_banabuiu.geojson' não encontrada.")
 
-    # Pontos de medição
+    # Pontos
     lat_col = cols.get("lat")
     lon_col = cols.get("lon")
     pts = []
@@ -670,33 +492,30 @@ def main():
             lon = to_float(row.get(lon_col))
             if lat is None or lon is None:
                 continue
-            
-            # Chama a função otimizada para o popup
-            popup_html = make_popup_html(row, cols) 
-            
-            # Configurações do marcador (CircleMarker) melhoradas
+            popup_html = make_popup_html(row, cols)
             folium.CircleMarker(
                 location=[lat, lon],
-                radius=10, 
-                color="#FF5733", 
+                radius=6,
+                color="#e31a1c",
                 fill=True,
-                fill_color="#FF5733",
-                fill_opacity=0.9, 
-                weight=3, 
-                popup=folium.Popup(popup_html, max_width=350, parse_html=True), 
-                tooltip=f"📍 {str(row.get(cols.get('secao',''), 'Seção'))}",
+                fill_color="#fb9a99",
+                fill_opacity=0.9,
+                popup=folium.Popup(popup_html, max_width=300, parse_html=True),
+                tooltip=str(row.get(cols.get("secao",""), "Seção"))
             ).add_to(fg_pontos)
             pts.append((lat, lon))
         fg_pontos.add_to(fmap)
+    else:
+        st.warning("Colunas de Latitude/Longitude não identificadas automaticamente.", icon="⚠️")
 
-    # ---- FIT: prioriza a Bacia; se ausente, usa pontos; senão mantém default
+    # Fit: prioriza a Bacia; se ausente, usa pontos; senão mantém default
     if bacia_bounds:
         fmap.fit_bounds(bacia_bounds)
     elif pts:
         fmap.fit_bounds([[min(p[0] for p in pts), min(p[1] for p in pts)],
                          [max(p[0] for p in pts), max(p[1] for p in pts)]])
 
-    # Botão de seleção de camadas (colapsado = aparece como botão)
+    # Botão de seleção de camadas
     LayerControl(collapsed=True, position="topright").add_to(fmap)
 
     st_folium(fmap, height=map_height, use_container_width=True)
@@ -704,54 +523,30 @@ def main():
     # =========================
     # GRÁFICOS (Data, Seção, Vazão medida)
     # =========================
-    st.markdown("---")
-    st.subheader("📈 Análises Gráficas")
-    
+    st.subheader("Gráficos")
     if cols.get("data") and cols.get("secao") and cols.get("vazao"):
         gdf = fdf[[cols["data"], cols["secao"], cols["vazao"]]].dropna()
-        # Converte a vazão de forma robusta
         gdf[cols["vazao"]] = pd.to_numeric(gdf[cols["vazao"]].astype(str).str.replace(",", "."), errors="coerce")
         gdf = gdf.dropna(subset=[cols["vazao"]])
 
-        # Gráfico de linha
-        st.markdown("**📈 Vazão ao Longo do Tempo**")
-        line = alt.Chart(gdf).mark_line(point=True, strokeWidth=3).encode(
-            x=alt.X(f"{cols['data']}:T", title="Data", axis=alt.Axis(labelAngle=-45)),
-            y=alt.Y(f"{cols['vazao']}:Q", title="Vazão medida (m³/s)"),
-            color=alt.Color(f"{cols['secao']}:N", title="Seção", 
-                            scale=alt.Scale(scheme='set1')), 
-            tooltip=[
-                alt.Tooltip(cols["data"], title="Data", format="%Y-%m-%d"),
-                alt.Tooltip(cols["secao"], title="Seção"),
-                alt.Tooltip(cols["vazao"], title="Vazão (m³/s)", format=".2f")
-            ]
-        ).properties(width="container", height=400).interactive() 
+        line = alt.Chart(gdf).mark_line(point=True).encode(
+            x=alt.X(f"{cols['data']}:T", title="Data"),
+            y=alt.Y(f"{cols['vazao']}:Q", title="Vazão medida"),
+            color=alt.Color(f"{cols['secao']}:N", title="Seção"),
+            tooltip=[cols["data"], cols["secao"], cols["vazao"]]
+        ).properties(width="container", height=360, title="Vazão ao longo do tempo por Seção")
         st.altair_chart(line, use_container_width=True)
 
-        # Gráfico de boxplot
-        st.markdown("**📊 Distribuição de Vazão por Seção**")
-        box = alt.Chart(gdf).mark_boxplot(size=30, opacity=0.8).encode(
-            x=alt.X(f"{cols['secao']}:N", title="Seção", axis=alt.Axis(labelAngle=-45)),
-            y=alt.Y(f"{cols['vazao']}:Q", title="Vazão medida (m³/s)"),
-            color=alt.Color(f"{cols['secao']}:N", legend=None,
-                            scale=alt.Scale(scheme='set1')),
-            tooltip=[
-                alt.Tooltip(cols["secao"], title="Seção"),
-                alt.Tooltip(cols["vazao"], title="Vazão (m³/s)", format=".2f")
-            ]
-        ).properties(width="container", height=400)
+        box = alt.Chart(gdf).mark_boxplot().encode(
+            x=alt.X(f"{cols['secao']}:N", title="Seção"),
+            y=alt.Y(f"{cols['vazao']}:Q", title="Vazão medida"),
+            color=alt.Color(f"{cols['secao']}:N", legend=None)
+        ).properties(width="container", height=320, title="Distribuição de Vazão por Seção")
         st.altair_chart(box, use_container_width=True)
     else:
-        st.info("📊 Para os gráficos, são necessárias as colunas **Data**, **Seção** e **Vazão medida**.")
+        st.info("Para os gráficos, são necessárias as colunas **Data**, **Seção** e **Vazão medida**.")
 
-    # Footer
-    st.markdown("---")
-    st.markdown("""
-        <div style="text-align: center; color: #666; padding: 1rem;">
-            <p>© 2024 Sistema de Monitoramento de Vazões • Desenvolvido com Python 🐍</p>
-            <p style="font-size: 0.9em;">Streamlit + Folium + Altair + LightGallery</p>
-        </div>
-    """, unsafe_allow_html=True)
+    st.caption("© Dados Python • Streamlit + Folium + Altair + LightGallery")
 
 if __name__ == "__main__":
     main()
