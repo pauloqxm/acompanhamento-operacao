@@ -126,8 +126,6 @@ def gdrive_extract_id(url: str):
 def drive_image_urls(file_id: str):
     """Thumb e imagem grande (ambas image/*)."""
     thumb = f"https://drive.google.com/thumbnail?id={file_id}&sz=w480"
-    big   = f"https://drive.google.com/thumbnail?id={file_id}&sz=w2048}"
-    # corrigindo possível typo na linha acima: removendo } sobrando
     big   = f"https://drive.google.com/thumbnail?id={file_id}&sz=w2048"
     return thumb, big
 
