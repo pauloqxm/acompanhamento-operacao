@@ -43,9 +43,9 @@ TZ = ZoneInfo("America/Fortaleza")
 # =========================
 # Parâmetros FIXOS (sem controles)
 # =========================
-ICON_URL = "https://i.ibb.co/kgbmmjWc/location-icon-242304.png"
+ICON_URL = "https://i.ibb.co/FqW4BJZr/rio-meidcao.png"
 USE_ICON = True
-ICON_W, ICON_H = 32, 24
+ICON_W, ICON_H = 24, 24
 
 POPUP_WIDTH = 360
 POPUP_HEIGHT = 300
