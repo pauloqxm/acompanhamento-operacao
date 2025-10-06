@@ -564,7 +564,6 @@ def main():
 
     # Camadas base com attribution correto
     folium.TileLayer("CartoDB Positron", name="🗺️ CartoDB Positron").add_to(fmap)
-    folium.TileLayer("OpenStreetMap", name="🌍 OpenStreetMap").add_to(fmap)
     # ⛰️ Stamen Terrain com attribution explícito (evita erro)
     folium.TileLayer(
         tiles="https://stamen-tiles.a.ssl.fastly.net/terrain/{z}/{x}/{y}.png",
@@ -577,6 +576,7 @@ def main():
         name="🛰️ Esri World Imagery",
         attr="Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community"
     ).add_to(fmap)
+    folium.TileLayer("OpenStreetMap", name="🌍 OpenStreetMap").add_to(fmap)
 
     # FeatureGroups para poder ligar/desligar
     fg_bacia   = folium.FeatureGroup(name="🏞️ Bacia do Banabuiú", show=True)
