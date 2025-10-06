@@ -283,9 +283,9 @@ def main():
 
     st.success(f"Registros após filtros: **{len(fdf)}**")
 
-    # =========================
-    # TABELA + GALERIA
-    # =========================
+# =========================
+# TABELA + MÍDIAS (uma janela com seletor)
+# =========================
     st.subheader("Registros e Mídias")
     col_tab, col_media = st.columns([1, 1])
 
@@ -314,46 +314,112 @@ def main():
             st.warning("Não encontrei as colunas necessárias para a tabela solicitada.", icon="⚠️")
 
     with col_media:
-        st.markdown("**Galeria** (clique para ampliar)")
-        img_urls = []
-
-        def collect_media_urls(series, caption):
-            urls = []
-            if series is None:
-                return urls
-            for v in series.dropna().unique().tolist():
-                if isinstance(v, str):
-                    v = v.strip()
-                    if v.lower().startswith(("http://","https://")):
-                        # imagens do Drive → direct view
-                        direct = gdrive_image_direct(v)
-                        urls.append({"url": direct, "thumb": direct, "caption": caption})
-            return urls
-
-        # fotos
-        for key, label in [("foto1","Foto 1"), ("foto2","Foto 2"), ("foto3","Foto 3")]:
-            cname = cols.get(key)
-            if cname and cname in fdf.columns:
-                img_urls.extend(collect_media_urls(fdf[cname], label))
-
-        if img_urls:
-            render_lightgallery(img_urls, height_px=420)
+        st.markdown("**Mídias**")
+        # seletor da coluna de mídia
+        media_map = {
+            "Foto do local_URL": cols.get("foto1"),
+            "Foto (02)_URL":    cols.get("foto2"),
+            "Foto (03)_URL":    cols.get("foto3"),
+            "Video do Local_URL": cols.get("video"),
+        }
+        # mantém apenas opções que existem na base
+        valid_options = [label for label, cname in media_map.items() if cname and cname in fdf.columns]
+        if not valid_options:
+            st.info("Nenhuma coluna de mídia encontrada na base.")
         else:
-            st.info("Sem imagens para exibir (verifique se os links do Drive estão compartilhados como 'qualquer pessoa com o link').")
+            choice = st.selectbox("Escolha o que exibir", valid_options, index=0)
 
-        # vídeos (Google Drive preview ou link direto/YouTube)
-        vid_col = cols.get("video")
-        if vid_col and vid_col in fdf.columns:
-            urls = [u for u in fdf[vid_col].dropna().unique().tolist() if isinstance(u,str) and u.strip().lower().startswith(("http://","https://"))]
-            if urls:
-                st.markdown("**Vídeos**")
+            def extract_urls(series):
+                """Extrai múltiplos links por célula (separados por espaço, quebra de linha, vírgula ou ';')."""
+                urls = []
+                if series is None:
+                    return urls
+                for cell in series.dropna().tolist():
+                    if not isinstance(cell, str):
+                        continue
+                    parts = re.split(r"[,\n; ]+", cell.strip())
+                    for p in parts:
+                        u = p.strip()
+                        if u.lower().startswith(("http://","https://")):
+                            urls.append(u)
+                # remove duplicatas mantendo ordem
+                seen = set()
+                uniq = []
                 for u in urls:
-                    preview = gdrive_video_embed(u)
-                    if preview:
-                        components.html(f'<iframe src="{preview}" width="100%" height="340" allow="autoplay" allowfullscreen></iframe>', height=360)
-                    else:
-                        # YouTube ou MP4 direto
-                        st.video(u)
+                    if u not in seen:
+                        uniq.append(u); seen.add(u)
+                return uniq
+
+            if "Video" in choice:
+                # vídeos
+                vid_col = media_map[choice]
+                urls = extract_urls(fdf[vid_col])
+                if urls:
+                    for u in urls:
+                        preview = gdrive_video_embed(u)
+                        if preview:
+                            components.html(f'<iframe src="{preview}" width="100%" height="340" allow="autoplay" allowfullscreen></iframe>', height=360)
+                        else:
+                            st.video(u)
+                else:
+                    st.info("Sem vídeos para exibir nessa coluna.")
+            else:
+                # imagens — usa thumbnail do Drive como miniatura + view em tamanho maior no clique
+                img_col = media_map[choice]
+                urls = extract_urls(fdf[img_col])
+
+                def build_image_items(urls_list):
+                    items = []
+                    for u in urls_list:
+                        fid = gdrive_extract_id(u)
+                        if fid:
+                            thumb = f"https://drive.google.com/thumbnail?id={fid}&sz=w800"  # miniatura confiável
+                            big   = f"https://drive.google.com/uc?export=view&id={fid}"   # visualização ampliada
+                            items.append({"thumb": thumb, "url": big, "caption": choice})
+                        else:
+                            # fallback para URLs diretas (não-Drive)
+                            items.append({"thumb": u, "url": u, "caption": choice})
+                    return items
+
+                gallery_items = build_image_items(urls)
+                if gallery_items:
+                    # reusa o lightgallery com miniaturas robustas
+                    def render_lightgallery_single(images: list, height_px=480):
+                        items_html = "\n".join(
+                            [f'<a class="gallery-item" href="{img["url"]}" data-sub-html="{img.get("caption","")}">'
+                            f'<img src="{img["thumb"]}" loading="lazy"/></a>'
+                            for img in images]
+                        )
+                        html = f"""
+                        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@2.7.2/css/lightgallery-bundle.min.css">
+                        <style>
+                          .lg-backdrop {{ background: rgba(0,0,0,0.88); }}
+                          .gallery-container {{ display:flex; flex-wrap: wrap; gap: 12px; align-items:flex-start; }}
+                          .gallery-item img {{ height: 140px; width: auto; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,.15); }}
+                        </style>
+                        <div id="lightgallery_single" class="gallery-container">
+                          {items_html}
+                        </div>
+                        <script src="https://cdn.jsdelivr.net/npm/lightgallery@2.7.2/lightgallery.umd.min.js"></script>
+                        <script src="https://cdn.jsdelivr.net/npm/lightgallery@2.7.2/plugins/zoom/lg-zoom.umd.js"></script>
+                        <script src="https://cdn.jsdelivr.net/npm/lightgallery@2.7.2/plugins/thumbnail/lg-thumbnail.umd.js"></script>
+                        <script>
+                          window.addEventListener('load', () => {{
+                            lightGallery(document.getElementById('lightgallery_single'), {{
+                              speed: 300,
+                              download: false,
+                              zoom: true,
+                              thumbnail: true
+                            }});
+                          }});
+                        </script>
+                        """
+                        components.html(html, height=height_px, scrolling=True)
+
+                    render_lightgallery_single(gallery_items, height_px=420)
+                else:
+                    st.info("Sem imagens para exibir nessa coluna. Verifique se os links apontam para arquivos do Drive (não para pastas) e se estão compartilhados como 'qualquer pessoa com o link'.")
+
 
     # =========================
     # MAPA — Folium (wide)
