@@ -16,7 +16,7 @@ import altair as alt
 import streamlit.components.v1 as components
 
 # =========================
-# Config geral
+# Config geral 
 # =========================
 st.set_page_config(page_title="Perenização de Rios • Vazões", layout="wide")
 TZ = ZoneInfo("America/Fortaleza")
