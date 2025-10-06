@@ -333,31 +333,13 @@ def main():
     
     st.caption(f"🕐 Atualizado em {datetime.now(TZ).strftime('%d/%m/%Y %H:%M:%S')} — Fuso America/Fortaleza")
 
-    # Carregamento automático do Google Sheets (sem sidebar)
-    st.markdown("---")
-    st.subheader("📊 Configuração de Dados")
-    
-    col1, col2, col3 = st.columns([2,1,1])
-    with col1:
-        sheet_id = st.text_input("**Google Sheet ID**", value="1YstNFY5ehrOUjg_AoSztcqq466uRwstKY7gpvs0BWnI",
-                               help="ID da planilha Google Sheets")
-    with col2:
-        gid = st.text_input("**GID**", value="0", help="ID da aba da planilha")
-    with col3:
-        sep = st.selectbox("**Separador**", options=[",",";"], index=0, help="Separador do arquivo CSV")
-
-    # Status das camadas
-    st.markdown("**🗺️ Status das Camadas do Mapa:**")
-    col_status1, col_status2 = st.columns(2)
-    with col_status1:
-        trechos_status = '✅' if load_geojson_safe(*TRECHOS_CAND) else '❌ não encontrado'
-        st.write(f"`trechos_perene.geojson`: {trechos_status}")
-    with col_status2:
-        bacia_status = '✅' if load_geojson_safe(*BACIA_CAND) else '❌ não encontrado'
-        st.write(f"`bacia_banabuiu.geojson`: {bacia_status}")
+    # Carregamento automático do Google Sheets (configuração simplificada)
+    SHEET_ID = "1YstNFY5ehrOUjg_AoSztcqq466uRwstKY7gpvs0BWnI"
+    GID = "0"
+    SEP = ","
 
     try:
-        df = load_from_gsheet_csv(sheet_id, gid, sep=sep)
+        df = load_from_gsheet_csv(SHEET_ID, GID, sep=SEP)
     except Exception as e:
         st.error(f"❌ Erro ao carregar do Google Sheets: {e}")
         return
@@ -385,7 +367,7 @@ def main():
         if cols.get("data"):
             min_d = pd.to_datetime(df[cols["data"]]).min()
             max_d = pd.to_datetime(df[cols["data"]]).max()
-            col1, col2, col3, col4, col5 = st.columns(5)
+            col1, col2, col3, col4 = st.columns(4)
             with col1:
                 data_ini = st.date_input("**Data inicial**", 
                                        value=min_d.date() if pd.notna(min_d) else date.today(),
@@ -395,7 +377,7 @@ def main():
                                        value=max_d.date() if pd.notna(max_d) else date.today(),
                                        help="Data final do período")
         else:
-            col1, col2, col3, col4, col5 = st.columns(5)
+            col1, col2, col3, col4 = st.columns(4)
             data_ini = data_fim = None
             st.warning("⚠️ Coluna de **Data** não identificada automaticamente.")
 
@@ -407,10 +389,8 @@ def main():
             return vals
 
         with col3:
-            resp = st.multiselect("**Responsável**", options_for("responsavel"), help="Filtrar por responsável")
-        with col4:
             camp = st.multiselect("**Campanha**", options_for("campanha"), help="Filtrar por campanha")
-        with col5:
+        with col4:
             rese = st.multiselect("**Reservatório/Sistema**", options_for("reservatorio"), help="Filtrar por reservatório")
         
         secao_opts = options_for("secao")
@@ -430,7 +410,7 @@ def main():
         sel = set(map(str, selected))
         return fdf[cname].isin(sel)
 
-    for key, selected in [("responsavel", resp), ("campanha", camp), ("reservatorio", rese), ("secao", sec_sel)]:
+    for key, selected in [("campanha", camp), ("reservatorio", rese), ("secao", sec_sel)]:
         flt = filt_in(key, selected)
         if flt is not None:
             fdf = fdf.loc[flt]
@@ -487,10 +467,10 @@ def main():
         st.markdown("**🖼️ Galeria de Mídias**")
 
         media_map = {
-            "Foto Principal": cols.get("foto1"),
-            "Foto (02)":    cols.get("foto2"),
-            "Foto (03)":    cols.get("foto3"),
-            "Video do Local": cols.get("video"),
+            "Foto do local_URL": cols.get("foto1"),
+            "Foto (02)_URL":    cols.get("foto2"),
+            "Foto (03)_URL":    cols.get("foto3"),
+            "Video do Local_URL": cols.get("video"),
         }
         valid_options = [label for label, cname in media_map.items() if cname and cname in fdf.columns]
         if not valid_options:
@@ -538,7 +518,7 @@ def main():
                             items.append({"thumb": u, "src": u, "caption": caption, "iframe": False})
 
             if items:
-                render_lightgallery_mixed(items, height_px=340)
+                render_lightgallery_mixed(items, height_px=420)
             else:
                 st.info("📭 Sem mídias para exibir nessa coluna. Verifique se os links apontam para arquivos do Drive (não pastas) e se estão compartilhados como 'qualquer pessoa com o link'.")
 
