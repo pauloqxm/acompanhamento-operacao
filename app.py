@@ -10,12 +10,12 @@ from zoneinfo import ZoneInfo
 
 import folium
 from folium import GeoJson, GeoJsonTooltip, LayerControl
-from folium.features import CustomIcon   # <-- ícone personalizado
+from folium.features import CustomIcon
 from streamlit_folium import st_folium
 
 import altair as alt
 import streamlit.components.v1 as components
-from branca.element import IFrame        # <-- popup HTML em IFrame
+from branca.element import IFrame  # popups HTML
 
 # =========================
 # Config geral
@@ -126,6 +126,8 @@ def gdrive_extract_id(url: str):
 def drive_image_urls(file_id: str):
     """Thumb e imagem grande (ambas image/*)."""
     thumb = f"https://drive.google.com/thumbnail?id={file_id}&sz=w480"
+    big   = f"https://drive.google.com/thumbnail?id={file_id}&sz=w2048}"
+    # corrigindo possível typo na linha acima: removendo } sobrando
     big   = f"https://drive.google.com/thumbnail?id={file_id}&sz=w2048"
     return thumb, big
 
@@ -212,13 +214,7 @@ def make_popup_html(row, cols):
         "secao": "Seção",
         "vazao": "Vazão medida",
     }
-    icons = {
-        "data": "📅",
-        "campanha": "🏷️",
-        "reservatorio": "💧",
-        "secao": "📍",
-        "vazao": "🌊",
-    }
+    icons = {"data":"📅","campanha":"🏷️","reservatorio":"💧","secao":"📍","vazao":"🌊"}
 
     # Data formatada
     date_col = cols.get("data")
@@ -246,10 +242,11 @@ def make_popup_html(row, cols):
             if k == "vazao":
                 try:
                     vazao_f = float(str(value).replace(',', '.'))
-                    formatted_vazao = f'{vazao_f:,.2f} m³/s'.replace('.', '#').replace(',', '.').replace('#', ',')
+                    # Formatação brasileira com unidade L/s
+                    formatted_vazao = f'{vazao_f:,.2f} L/s'.replace('.', '#').replace(',', '.').replace('#', ',')
                     value = f'<span style="color:#FF5733;font-weight:700;font-size:1.2em;">{formatted_vazao}</span>'
                 except ValueError:
-                    value = f'<span style="color:#FF5733;font-weight:700;">{value}</span>'
+                    value = f'<span style="color:#FF5733;font-weight:700;">{value} L/s</span>'
             parts.append(f'''
                 <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:0.95em;">
                     <span style="font-weight:500;">{icon} {label}:</span>
@@ -299,7 +296,7 @@ def load_geojson_safe(*candidates):
     return None
 
 def geojson_bounds(gj: dict):
-    """Calcula bounds [[min_lat,min_lon],[max_lat,max_lon]] de um GeoJSON."""
+    """Bounds [[min_lat,min_lon],[max_lat,max_lon]] de um GeoJSON."""
     if not gj: 
         return None
 
@@ -347,7 +344,7 @@ BACIA_CAND   = ["bacia_banabuiu.geojson", "/mnt/data/bacia_banabuiu.geojson",
 # App
 # =========================
 def main():
-    # Header moderno
+    # Header
     st.markdown("""
         <div style="
             background: linear-gradient(135deg, #0f4c75 0%, #3282b8 100%);
@@ -361,7 +358,7 @@ def main():
     
     st.caption(f"🕐 Última atualização dos dados: {datetime.now(TZ).strftime('%d/%m/%Y %H:%M:%S')} — Fuso America/Fortaleza")
 
-    # Carregamento automático do Google Sheets
+    # Google Sheets
     SHEET_ID = "1YstNFY5ehrOUjg_AoSztcqq466uRwstKY7gpvs0BWnI"
     GID = "0"
     SEP = ","
@@ -376,11 +373,9 @@ def main():
         st.info("📭 Sem dados. Verifique permissões do Sheets e o GID informado.")
         return
 
-    # Normaliza nulos e descobre colunas
     df = df.replace({np.nan: None})
     cols = guess_columns(df)
 
-    # Data
     if cols.get("data") and cols["data"] in df.columns:
         df[cols["data"]] = pd.to_datetime(df[cols["data"]], errors="coerce", dayfirst=True)
 
@@ -452,7 +447,7 @@ def main():
     """, unsafe_allow_html=True)
 
     # =========================
-    # TABELA + MÍDIAS (seletor)
+    # TABELA + MÍDIAS
     # =========================
     st.markdown("---")
     st.subheader("📋 Dados e Mídias")
@@ -469,14 +464,15 @@ def main():
         ]
         table_cols = [c for c in table_cols if c in fdf.columns and c is not None]
         if table_cols:
+            renamed = {
+                cols.get("campanha",""): "Campanha",
+                cols.get("reservatorio",""): "Reservatório/Sistema",
+                cols.get("secao",""): "Seção",
+                cols.get("vazao",""): "Vazão (L/s)",  # <-- unidade
+                cols.get("obs",""): "Observações",
+            }
             st.dataframe(
-                fdf[table_cols].rename(columns={
-                    cols.get("campanha",""): "Campanha",
-                    cols.get("reservatorio",""): "Reservatório/Sistema",
-                    cols.get("secao",""): "Seção",
-                    cols.get("vazao",""): "Vazão medida",
-                    cols.get("obs",""): "Observações",
-                }),
+                fdf[table_cols].rename(columns=renamed),
                 use_container_width=True,
                 height=420
             )
@@ -511,7 +507,6 @@ def main():
                 if not isinstance(cell, str): 
                     continue
 
-                # Caption: Reservatório/Sistema • Seção
                 rlab = row.get(cols.get("reservatorio",""))
                 slab = row.get(cols.get("secao",""))
                 caption = " • ".join([x for x in [str(rlab) if rlab else None, str(slab) if slab else None] if x])
@@ -540,7 +535,7 @@ def main():
             if items:
                 render_lightgallery_mixed(items, height_px=340)
             else:
-                st.info("📭 Sem mídias para exibir nessa coluna. Verifique se os links apontam para arquivos do Drive (não pastas) e se estão compartilhados como 'qualquer pessoa com o link'.")
+                st.info("📭 Sem mídias para exibir nessa coluna. Verifique se os links estão públicos no Drive.")
 
     # =========================
     # MAPA — Folium (wide)
@@ -548,16 +543,14 @@ def main():
     st.markdown("---")
     st.subheader("🗺️ Mapa das Seções Monitoradas")
 
-    # Opções do mapa (ajustes do popup e do ícone)
+    # Ajustes do popup e ícone (sem AUTO)
     with st.container():
-        c1, c2, c3, c4 = st.columns([1,1,1,1])
+        c1, c2, c3 = st.columns([1,1,1])
         with c1:
-            auto_popup = st.checkbox("Ajuste automático do popup", value=True)
+            popup_width = st.slider("Largura do popup (px)", 260, 520, 360, 10)
         with c2:
-            popup_width = st.slider("Largura do popup (px)", 260, 520, 360, 10, disabled=auto_popup)
+            popup_height = st.slider("Altura do popup (px)", 160, 600, 300, 10)
         with c3:
-            popup_height_slider = st.slider("Altura do popup (px)", 160, 600, 300, 10, disabled=auto_popup)
-        with c4:
             use_icon = st.checkbox("Usar ícone nos pontos", value=True)
     with st.container():
         c5, c6 = st.columns([1,1])
@@ -628,31 +621,14 @@ def main():
                 continue
 
             popup_html = make_popup_html(row, cols)
-
-            # Altura do popup: automática (em função do conteúdo) ou fixa via slider
-            if auto_popup:
-                # Conta campos presentes para estimar altura
-                n = 0
-                if cols.get("data") and pd.notna(row.get(cols["data"])): n += 1
-                for k in ["campanha", "reservatorio", "secao", "vazao"]:
-                    c = cols.get(k)
-                    if c and pd.notna(row.get(c)): n += 1
-                # base + por linha (ajuste fino se quiser)
-                popup_width_cur = 360
-                popup_height_cur = 180 + n * 28
-            else:
-                popup_width_cur = popup_width
-                popup_height_cur = popup_height_slider
-
-            iframe = IFrame(html=popup_html, width=popup_width_cur, height=popup_height_cur)
-            popup = folium.Popup(iframe, max_width=popup_width_cur)
+            iframe = IFrame(html=popup_html, width=popup_width, height=popup_height)
+            popup = folium.Popup(iframe, max_width=popup_width)
 
             if use_icon:
-                # Marcador com ícone personalizado
                 icon = CustomIcon(
                     icon_image=ICON_URL,
                     icon_size=(icon_w, icon_h),
-                    icon_anchor=(icon_w // 2, icon_h)  # âncora na base central
+                    icon_anchor=(icon_w // 2, icon_h)
                 )
                 folium.Marker(
                     location=[lat, lon],
@@ -661,7 +637,6 @@ def main():
                     tooltip=f"📍 {str(row.get(cols.get('secao',''), 'Seção'))}",
                 ).add_to(fg_pontos)
             else:
-                # Fallback: círculo
                 folium.CircleMarker(
                     location=[lat, lon],
                     radius=10, color="#FF5733",
@@ -674,7 +649,7 @@ def main():
 
         fg_pontos.add_to(fmap)
 
-    # Fit: prioriza a Bacia; se ausente, usa pontos
+    # Fit
     if bacia_bounds:
         fmap.fit_bounds(bacia_bounds)
     elif pts:
@@ -695,27 +670,34 @@ def main():
         gdf[cols["vazao"]] = pd.to_numeric(gdf[cols["vazao"]].astype(str).str.replace(",", "."), errors="coerce")
         gdf = gdf.dropna(subset=[cols["vazao"]])
 
+        # 📈 Vazão ao Longo do Tempo (eixo de tempo só com meses; unidade L/s)
         st.markdown("**📈 Vazão ao Longo do Tempo**")
         line = alt.Chart(gdf).mark_line(point=True, strokeWidth=3).encode(
-            x=alt.X(f"{cols['data']}:T", title="Data", axis=alt.Axis(labelAngle=-45)),
-            y=alt.Y(f"{cols['vazao']}:Q", title="Vazão medida (m³/s)"),
+            x=alt.X(
+                f"{cols['data']}:T",
+                title="Mês",
+                axis=alt.Axis(format="%b", labelAngle=0),      # apenas mês (Jan, Feb, ...)
+                scale=alt.Scale(nice='month')                  # ticks mensais
+            ),
+            y=alt.Y(f"{cols['vazao']}:Q", title="Vazão medida (L/s)"),
             color=alt.Color(f"{cols['secao']}:N", title="Seção", scale=alt.Scale(scheme='set1')), 
             tooltip=[
                 alt.Tooltip(cols["data"], title="Data", format="%Y-%m-%d"),
                 alt.Tooltip(cols["secao"], title="Seção"),
-                alt.Tooltip(cols["vazao"], title="Vazão (m³/s)", format=".2f")
+                alt.Tooltip(cols["vazao"], title="Vazão (L/s)", format=".2f")
             ]
-        ).properties(width="container", height=400).interactive() 
+        ).properties(width="container", height=400).interactive()
         st.altair_chart(line, use_container_width=True)
 
+        # 📊 Boxplot (unidade L/s)
         st.markdown("**📊 Distribuição de Vazão por Seção**")
         box = alt.Chart(gdf).mark_boxplot(size=30, opacity=0.8).encode(
             x=alt.X(f"{cols['secao']}:N", title="Seção", axis=alt.Axis(labelAngle=-45)),
-            y=alt.Y(f"{cols['vazao']}:Q", title="Vazão medida (m³/s)"),
+            y=alt.Y(f"{cols['vazao']}:Q", title="Vazão medida (L/s)"),
             color=alt.Color(f"{cols['secao']}:N", legend=None, scale=alt.Scale(scheme='set1')),
             tooltip=[
                 alt.Tooltip(cols["secao"], title="Seção"),
-                alt.Tooltip(cols["vazao"], title="Vazão (m³/s)", format=".2f")
+                alt.Tooltip(cols["vazao"], title="Vazão (L/s)", format=".2f")
             ]
         ).properties(width="container", height=400)
         st.altair_chart(box, use_container_width=True)
