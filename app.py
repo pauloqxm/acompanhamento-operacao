@@ -45,7 +45,7 @@ TZ = ZoneInfo("America/Fortaleza")
 # =========================
 ICON_URL = "https://i.ibb.co/FqW4BJZr/rio-meidcao.png"
 USE_ICON = True
-ICON_W, ICON_H = 24, 24
+ICON_W, ICON_H = 30, 30
 
 POPUP_WIDTH = 360
 POPUP_HEIGHT = 300
