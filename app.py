@@ -14,6 +14,7 @@ from streamlit_folium import st_folium
 
 import altair as alt
 import streamlit.components.v1 as components
+from branca.element import IFrame  # <-- para popups com HTML
 
 # =========================
 # Config geral
@@ -303,7 +304,6 @@ def geojson_bounds(gj: dict):
         return None
 
     def walk_coords(coords):
-        # retorna lista de (lon, lat)
         if isinstance(coords, (list, tuple)) and coords and isinstance(coords[0], (int, float)):
             return [(coords[0], coords[1])]
         result = []
@@ -493,7 +493,7 @@ def main():
         media_map = {
             "Foto Principal": cols.get("foto1"),
             "Foto (02)":     cols.get("foto2"),
-            "Foto (03)":     cols.get("foto3"),   # corrige rótulo visual
+            "Foto (03)":     cols.get("foto3"),
             "Video do Local": cols.get("video"),
         }
         valid_options = [label for label, cname in media_map.items() if cname and cname in fdf.columns]
@@ -564,7 +564,8 @@ def main():
 
     # Camadas base com attribution correto
     folium.TileLayer("CartoDB Positron", name="🗺️ CartoDB Positron").add_to(fmap)
-    # ⛰️ Stamen Terrain com attribution explícito (evita erro)
+    folium.TileLayer("OpenStreetMap", name="🌍 OpenStreetMap").add_to(fmap)
+    # ⛰️ Stamen Terrain com attribution explícito
     folium.TileLayer(
         tiles="https://stamen-tiles.a.ssl.fastly.net/terrain/{z}/{x}/{y}.png",
         name="⛰️ Stamen Terrain",
@@ -576,7 +577,6 @@ def main():
         name="🛰️ Esri World Imagery",
         attr="Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community"
     ).add_to(fmap)
-    folium.TileLayer("OpenStreetMap", name="🌍 OpenStreetMap").add_to(fmap)
 
     # FeatureGroups para poder ligar/desligar
     fg_bacia   = folium.FeatureGroup(name="🏞️ Bacia do Banabuiú", show=True)
@@ -634,7 +634,12 @@ def main():
             if lat is None or lon is None:
                 continue
             
-            popup_html = make_popup_html(row, cols) 
+            popup_html = make_popup_html(row, cols)
+            # --- Popup via IFrame (corrige exibição do HTML) ---
+            popup_width, popup_height = 360, 300
+            iframe = IFrame(html=popup_html, width=popup_width, height=popup_height)
+            popup = folium.Popup(iframe, max_width=popup_width)
+
             folium.CircleMarker(
                 location=[lat, lon],
                 radius=10, 
@@ -643,7 +648,7 @@ def main():
                 fill_color="#FF5733",
                 fill_opacity=0.9, 
                 weight=3, 
-                popup=folium.Popup(popup_html, max_width=350, parse_html=True), 
+                popup=popup,
                 tooltip=f"📍 {str(row.get(cols.get('secao',''), 'Seção'))}",
             ).add_to(fg_pontos)
             pts.append((lat, lon))
