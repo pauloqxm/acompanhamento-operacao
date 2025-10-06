@@ -467,10 +467,10 @@ def main():
         st.markdown("**🖼️ Galeria de Mídias**")
 
         media_map = {
-            "Foto do local_URL": cols.get("foto1"),
-            "Foto (02)_URL":    cols.get("foto2"),
-            "Foto (03)_URL":    cols.get("foto3"),
-            "Video do Local_URL": cols.get("video"),
+            "Foto Principal": cols.get("foto1"),
+            "Foto (02)":    cols.get("foto2"),
+            "Foto (03)L":    cols.get("foto3"),
+            "Video do Local": cols.get("video"),
         }
         valid_options = [label for label, cname in media_map.items() if cname and cname in fdf.columns]
         if not valid_options:
@@ -518,7 +518,7 @@ def main():
                             items.append({"thumb": u, "src": u, "caption": caption, "iframe": False})
 
             if items:
-                render_lightgallery_mixed(items, height_px=420)
+                render_lightgallery_mixed(items, height_px=340)
             else:
                 st.info("📭 Sem mídias para exibir nessa coluna. Verifique se os links apontam para arquivos do Drive (não pastas) e se estão compartilhados como 'qualquer pessoa com o link'.")
 
