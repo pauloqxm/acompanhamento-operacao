@@ -42,34 +42,15 @@ def normalize_col(s: str) -> str:
         "Ú":"u","Ù":"u","Û":"u","Ü":"u",
         "Ç":"c",
     }
-    for a,b in repl.items():
-        t = t.replace(a,b)
+    for a,b in repl.items(): t = t.replace(a,b)
     t = t.lower()
     t = re.sub(r"\s+", " ", t)
     return t
-
-def first_nonempty(*vals, default=None):
-    for v in vals:
-        if v is not None and v != "" and not (isinstance(v, float) and math.isnan(v)):
-            return v
-    return default
-
-def to_datetime_br(x):
-    for dayfirst in (True, False):
-        try:
-            return pd.to_datetime(x, dayfirst=dayfirst, errors="raise")
-        except Exception:
-            pass
-    return pd.to_datetime(x, errors="coerce")
 
 @st.cache_data(show_spinner=False)
 def load_from_gsheet_csv(sheet_id: str, gid: str = "0", sep=","):
     url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
     return pd.read_csv(url, sep=sep)
-
-@st.cache_data(show_spinner=False)
-def load_csv(upload, sep=","):
-    return pd.read_csv(upload, sep=sep)
 
 def guess_columns(df: pd.DataFrame):
     aliases = {
@@ -87,7 +68,6 @@ def guess_columns(df: pd.DataFrame):
         "foto3": ["foto (03)_url", "foto 03_url"],
         "video": ["video do local_url", "vídeo do local_url", "video_url"],
     }
-
     norm_map = {c: normalize_col(c) for c in df.columns}
     reverse = {}
     for orig, norm in norm_map.items():
@@ -110,63 +90,78 @@ def guess_columns(df: pd.DataFrame):
             found[key] = picked
     return found
 
-# --------- Google Drive helpers (imagens/vídeos) ----------
+# --------- Google Drive helpers ----------
 def gdrive_extract_id(url: str):
     if not isinstance(url, str):
         return None
     url = url.strip()
-    # formatos: /file/d/<ID>/view , open?id=<ID> , uc?id=<ID> , thumbnail?id=<ID>
     m = re.search(r"/d/([a-zA-Z0-9_-]{10,})", url)
-    if m:
-        return m.group(1)
+    if m: return m.group(1)
     m = re.search(r"[?&]id=([a-zA-Z0-9_-]{10,})", url)
-    if m:
-        return m.group(1)
+    if m: return m.group(1)
     return None
 
-def gdrive_image_direct(url: str):
-    """Transforma link do Drive em visualização direta de imagem."""
-    fid = gdrive_extract_id(url)
-    if fid:
-        return f"https://drive.google.com/uc?export=view&id={fid}"
-    return url  # pode já ser http direto
+def drive_image_urls(file_id: str):
+    """Thumb rápida e imagem grande (ambas retornam image/*, não HTML)."""
+    thumb = f"https://drive.google.com/thumbnail?id={file_id}&sz=w480"
+    big   = f"https://drive.google.com/thumbnail?id={file_id}&sz=w2048"
+    return thumb, big
 
-def gdrive_video_embed(url: str):
-    """Transforma link do Drive em preview embed (iframe)."""
-    fid = gdrive_extract_id(url)
-    if fid:
-        return f"https://drive.google.com/file/d/{fid}/preview"
-    return None
+def drive_video_embed(file_id: str):
+    """Preview em iframe para vídeo do Drive."""
+    return f"https://drive.google.com/file/d/{file_id}/preview"
 
-def render_lightgallery(images: list, height_px=480):
-    if not images:
-        st.info("Sem imagens disponíveis.")
+def render_lightgallery_mixed(items: list, height_px=440):
+    """
+    items = [{ 'thumb':..., 'src':..., 'caption':..., 'iframe': bool }]
+    """
+    if not items:
+        st.info("Sem mídias para exibir.")
         return
-    items_html = "\n".join(
-        [f'<a class="gallery-item" href="{img["url"]}" data-sub-html="{img.get("caption","")}">'
-         f'<img src="{img["thumb"]}" loading="lazy"/></a>'
-         for img in images]
-    )
+
+    anchors = []
+    for it in items:
+        if it.get("iframe"):
+            anchors.append(
+                f'''<a class="gallery-item" data-iframe="true" data-src="{it["src"]}" data-sub-html="{it.get("caption","")}">
+                        <img src="{it["thumb"]}" loading="lazy"/>
+                    </a>'''
+            )
+        else:
+            anchors.append(
+                f'''<a class="gallery-item" href="{it["src"]}" data-sub-html="{it.get("caption","")}">
+                        <img src="{it["thumb"]}" loading="lazy"/>
+                    </a>'''
+            )
+
+    items_html = "\n".join(anchors)
+
     html = f"""
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@2.7.2/css/lightgallery-bundle.min.css">
     <style>
-      .lg-backdrop {{ background: rgba(0,0,0,0.88); }}
+      .lg-backdrop {{ background: rgba(0,0,0,0.9); }}
       .gallery-container {{ display:flex; flex-wrap: wrap; gap: 12px; align-items:flex-start; }}
-      .gallery-item img {{ height: 140px; width: auto; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,.15); }}
+      .gallery-item img {{ height: 140px; width: auto; border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,.15); }}
     </style>
-    <div id="lightgallery" class="gallery-container">
-      {items_html}
-    </div>
+
+    <div id="lg-mixed" class="gallery-container">{items_html}</div>
+
     <script src="https://cdn.jsdelivr.net/npm/lightgallery@2.7.2/lightgallery.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/lightgallery@2.7.2/plugins/zoom/lg-zoom.umd.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/lightgallery@2.7.2/plugins/thumbnail/lg-thumbnail.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lightgallery@2.7.2/plugins/video/lg-video.umd.js"></script>
+
     <script>
       window.addEventListener('load', () => {{
-        const lg = lightGallery(document.getElementById('lightgallery'), {{
-          speed: 300,
-          download: false,
+        const container = document.getElementById('lg-mixed');
+        lightGallery(container, {{
+          selector: '.gallery-item',
           zoom: true,
-          thumbnail: true
+          thumbnail: true,
+          download: false,
+          controls: true,
+          loop: true,
+          plugins: [lgZoom, lgThumbnail, lgVideo]
         }});
       }});
     </script>
@@ -175,27 +170,33 @@ def render_lightgallery(images: list, height_px=480):
 
 def make_popup_html(row, cols):
     safe = lambda x: "-" if (x is None or (isinstance(x,float) and math.isnan(x))) else str(x)
-    parts = []
     labels = {
         "campanha": "Campanha",
         "reservatorio": "Reservatório/Sistema",
         "secao": "Seção",
         "vazao": "Vazão medida",
     }
+    parts = []
     for k in ["campanha", "reservatorio", "secao", "vazao"]:
         colname = cols.get(k)
         if colname and colname in row and pd.notna(row[colname]):
             parts.append(f"<b>{labels[k]}:</b> {safe(row[colname])}")
     return "<br>".join(parts)
 
-def load_geojson_safe(local_path: str):
-    if os.path.exists(local_path):
-        with open(local_path, "r", encoding="utf-8") as f:
-            return json.load(f)
+def load_geojson_safe(*candidates):
+    for path in candidates:
+        if path and os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception:
+                pass
     return None
 
-TRECHOS_PATH = "trechos_perene.geojson"
-BACIA_PATH   = "bacia_banabuiu.geojson"
+# Caminhos possíveis (local e /mnt/data/)
+TRECHOS_CAND = ["trechos_perene.geojson", "/mnt/data/trechos_perene.geojson"]
+BACIA_CAND   = ["bacia_banabuiu.geojson", "/mnt/data/bacia_banabuiu.geojson",
+                "bacia_banabuiu.geojason", "/mnt/data/bacia_banabuiu.geojason"]
 
 # =========================
 # App
@@ -204,7 +205,7 @@ def main():
     st.title("Monitoramento de Vazões e Perenização de Rios")
     st.caption(f"Atualizado em {datetime.now(TZ).strftime('%d/%m/%Y %H:%M:%S')} — Fuso America/Fortaleza")
 
-    # --------- Carregamento automático do Google Sheets ---------
+    # Carregamento automático do Google Sheets
     with st.sidebar:
         st.header("Fonte de dados")
         st.write("Carregando automaticamente do Google Sheets.")
@@ -212,19 +213,26 @@ def main():
         gid = st.text_input("GID", value="0")
         sep = st.selectbox("Separador (Sheets → CSV)", options=[",",";"], index=0)
 
+        st.divider()
+        st.subheader("Camadas de mapa (arquivos locais)")
+        st.write(f"trechos_perene.geojson: {'✅' if load_geojson_safe(*TRECHOS_CAND) else '❌ não encontrado'}")
+        st.write(f"bacia_banabuiu.geojson: {'✅' if load_geojson_safe(*BACIA_CAND) else '❌ não encontrado'}")
+
     try:
         df = load_from_gsheet_csv(sheet_id, gid, sep=sep)
     except Exception as e:
         st.error(f"Erro ao carregar do Sheets: {e}")
-        df = pd.DataFrame()
+        return
 
     if df.empty:
         st.info("Sem dados. Verifique permissões do Sheets e o GID informado.")
         return
 
+    # Normaliza nulos e descobre colunas
     df = df.replace({np.nan: None})
     cols = guess_columns(df)
 
+    # Data
     if cols.get("data") and cols["data"] in df.columns:
         df[cols["data"]] = pd.to_datetime(df[cols["data"]], errors="coerce", dayfirst=True)
 
@@ -259,7 +267,6 @@ def main():
         camp = st.multiselect("Campanha", options_for("campanha"))
     with c5:
         rese = st.multiselect("Reservatório/Sistema", options_for("reservatorio"))
-
     secao_opts = options_for("secao")
     sec_sel = st.multiselect("Seção", secao_opts)
 
@@ -283,9 +290,9 @@ def main():
 
     st.success(f"Registros após filtros: **{len(fdf)}**")
 
-# =========================
-# TABELA + MÍDIAS (uma janela com seletor)
-# =========================
+    # =========================
+    # TABELA + MÍDIAS (seletor)
+    # =========================
     st.subheader("Registros e Mídias")
     col_tab, col_media = st.columns([1, 1])
 
@@ -315,111 +322,66 @@ def main():
 
     with col_media:
         st.markdown("**Mídias**")
-        # seletor da coluna de mídia
+
         media_map = {
             "Foto do local_URL": cols.get("foto1"),
             "Foto (02)_URL":    cols.get("foto2"),
             "Foto (03)_URL":    cols.get("foto3"),
             "Video do Local_URL": cols.get("video"),
         }
-        # mantém apenas opções que existem na base
         valid_options = [label for label, cname in media_map.items() if cname and cname in fdf.columns]
         if not valid_options:
             st.info("Nenhuma coluna de mídia encontrada na base.")
         else:
             choice = st.selectbox("Escolha o que exibir", valid_options, index=0)
 
-            def extract_urls(series):
-                """Extrai múltiplos links por célula (separados por espaço, quebra de linha, vírgula ou ';')."""
-                urls = []
-                if series is None:
-                    return urls
-                for cell in series.dropna().tolist():
-                    if not isinstance(cell, str):
+            # Função que divide múltiplos links numa mesma célula
+            def split_urls(cell: str):
+                parts = re.split(r"[,\n; ]+", cell.strip())
+                return [p.strip() for p in parts if p.strip().lower().startswith(("http://","https://"))]
+
+            # Construção dos itens preservando a LEGENDA por linha (Reservatório • Seção)
+            items = []
+            seen = set()
+            cname = media_map[choice]
+
+            for _, row in fdf.iterrows():
+                cell = row.get(cname)
+                if not isinstance(cell, str): 
+                    continue
+
+                # Caption: Reservatório/Sistema • Seção
+                rlab = row.get(cols.get("reservatorio",""))
+                slab = row.get(cols.get("secao",""))
+                caption = " • ".join([x for x in [str(rlab) if rlab else None, str(slab) if slab else None] if x])
+
+                for u in split_urls(cell):
+                    if u in seen:
                         continue
-                    parts = re.split(r"[,\n; ]+", cell.strip())
-                    for p in parts:
-                        u = p.strip()
-                        if u.lower().startswith(("http://","https://")):
-                            urls.append(u)
-                # remove duplicatas mantendo ordem
-                seen = set()
-                uniq = []
-                for u in urls:
-                    if u not in seen:
-                        uniq.append(u); seen.add(u)
-                return uniq
+                    seen.add(u)
 
-            if "Video" in choice:
-                # vídeos
-                vid_col = media_map[choice]
-                urls = extract_urls(fdf[vid_col])
-                if urls:
-                    for u in urls:
-                        preview = gdrive_video_embed(u)
-                        if preview:
-                            components.html(f'<iframe src="{preview}" width="100%" height="340" allow="autoplay" allowfullscreen></iframe>', height=360)
-                        else:
-                            st.video(u)
-                else:
-                    st.info("Sem vídeos para exibir nessa coluna.")
-            else:
-                # imagens — usa thumbnail do Drive como miniatura + view em tamanho maior no clique
-                img_col = media_map[choice]
-                urls = extract_urls(fdf[img_col])
-
-                def build_image_items(urls_list):
-                    items = []
-                    for u in urls_list:
+                    if "Video" in choice:
                         fid = gdrive_extract_id(u)
                         if fid:
-                            thumb = f"https://drive.google.com/thumbnail?id={fid}&sz=w800"  # miniatura confiável
-                            big   = f"https://drive.google.com/uc?export=view&id={fid}"   # visualização ampliada
-                            items.append({"thumb": thumb, "url": big, "caption": choice})
+                            thumb, _ = drive_image_urls(fid)      # thumb do próprio Drive
+                            src = drive_video_embed(fid)           # iframe preview
+                            items.append({"thumb": thumb, "src": src, "caption": caption, "iframe": True})
                         else:
-                            # fallback para URLs diretas (não-Drive)
-                            items.append({"thumb": u, "url": u, "caption": choice})
-                    return items
+                            # YouTube/Vimeo/MP4 direto (comportamento como iframe)
+                            items.append({"thumb": u, "src": u, "caption": caption, "iframe": True})
+                    else:
+                        # Imagens
+                        fid = gdrive_extract_id(u)
+                        if fid:
+                            thumb, big = drive_image_urls(fid)
+                            items.append({"thumb": thumb, "src": big, "caption": caption, "iframe": False})
+                        else:
+                            items.append({"thumb": u, "src": u, "caption": caption, "iframe": False})
 
-                gallery_items = build_image_items(urls)
-                if gallery_items:
-                    # reusa o lightgallery com miniaturas robustas
-                    def render_lightgallery_single(images: list, height_px=480):
-                        items_html = "\n".join(
-                            [f'<a class="gallery-item" href="{img["url"]}" data-sub-html="{img.get("caption","")}">'
-                            f'<img src="{img["thumb"]}" loading="lazy"/></a>'
-                            for img in images]
-                        )
-                        html = f"""
-                        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@2.7.2/css/lightgallery-bundle.min.css">
-                        <style>
-                          .lg-backdrop {{ background: rgba(0,0,0,0.88); }}
-                          .gallery-container {{ display:flex; flex-wrap: wrap; gap: 12px; align-items:flex-start; }}
-                          .gallery-item img {{ height: 140px; width: auto; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,.15); }}
-                        </style>
-                        <div id="lightgallery_single" class="gallery-container">
-                          {items_html}
-                        </div>
-                        <script src="https://cdn.jsdelivr.net/npm/lightgallery@2.7.2/lightgallery.umd.min.js"></script>
-                        <script src="https://cdn.jsdelivr.net/npm/lightgallery@2.7.2/plugins/zoom/lg-zoom.umd.js"></script>
-                        <script src="https://cdn.jsdelivr.net/npm/lightgallery@2.7.2/plugins/thumbnail/lg-thumbnail.umd.js"></script>
-                        <script>
-                          window.addEventListener('load', () => {{
-                            lightGallery(document.getElementById('lightgallery_single'), {{
-                              speed: 300,
-                              download: false,
-                              zoom: true,
-                              thumbnail: true
-                            }});
-                          }});
-                        </script>
-                        """
-                        components.html(html, height=height_px, scrolling=True)
-
-                    render_lightgallery_single(gallery_items, height_px=420)
-                else:
-                    st.info("Sem imagens para exibir nessa coluna. Verifique se os links apontam para arquivos do Drive (não para pastas) e se estão compartilhados como 'qualquer pessoa com o link'.")
-
+            if items:
+                render_lightgallery_mixed(items, height_px=420)
+            else:
+                st.info("Sem mídias para exibir nessa coluna. Verifique se os links apontam para arquivos do Drive (não pastas) e se estão compartilhados como 'qualquer pessoa com o link'.")
 
     # =========================
     # MAPA — Folium (wide)
@@ -430,11 +392,10 @@ def main():
     start_lat, start_lon, start_zoom = -5.199, -39.292, 8
     fmap = folium.Map(location=[start_lat, start_lon], zoom_start=start_zoom, control_scale=True, prefer_canvas=True)
 
-    # Tiles com attribution correto (evita erro de custom tiles)
+    # Tiles com attribution correto (evita erro do Folium)
     folium.TileLayer("OpenStreetMap", name="OpenStreetMap").add_to(fmap)
     folium.TileLayer("CartoDB Positron", name="CartoDB Positron").add_to(fmap)
     folium.TileLayer("CartoDB Dark_Matter", name="CartoDB Dark Matter").add_to(fmap)
-    # OpenTopoMap (com attribution)
     folium.TileLayer(
         tiles="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
         name="OpenTopoMap",
@@ -442,8 +403,8 @@ def main():
     ).add_to(fmap)
 
     # GeoJSON camadas
-    trechos = load_geojson_safe(TRECHOS_PATH)
-    bacia   = load_geojson_safe(BACIA_PATH)
+    trechos = load_geojson_safe(*TRECHOS_CAND)
+    bacia   = load_geojson_safe(*BACIA_CAND)
 
     if trechos:
         GeoJson(
@@ -453,7 +414,7 @@ def main():
             tooltip=GeoJsonTooltip(fields=[], aliases=[], sticky=False)
         ).add_to(fmap)
     else:
-        st.info("Camada 'trechos_perene.geojson' não encontrada no diretório.")
+        st.info("Camada 'trechos_perene.geojson' não encontrada.")
 
     if bacia:
         GeoJson(
@@ -462,7 +423,7 @@ def main():
             style_function=lambda x: {"color":"#33a02c","weight":2,"opacity":0.8, "fillOpacity":0.05}
         ).add_to(fmap)
     else:
-        st.info("Camada 'bacia_banabuiu.geojson' não encontrada no diretório.")
+        st.info("Camada 'bacia_banabuiu.geojson' não encontrada.")
 
     # Pontos
     lat_col = cols.get("lat")
