@@ -234,7 +234,7 @@ def make_popup_html(row, cols):
                 <div style="height: 1px; background-color: rgba(255, 255, 255, 0.2); margin: 6px 0;"></div>
             '''
         except:
-             pass # Se falhar, não exibe a data formatada
+             pass 
         
     
     # 2. Monta as partes do corpo do popup
@@ -277,7 +277,7 @@ def make_popup_html(row, cols):
         padding: 15px;
         min-width: 250px;
         max-width: 350px;
-        background: linear-gradient(135deg, #1abc9c 0%, #3498db 100%); /* Novo gradiente mais vibrante */
+        background: linear-gradient(135deg, #1abc9c 0%, #3498db 100%); /* Gradiente turquesa/azul */
         border-radius: 15px;
         box-shadow: 0 10px 30px rgba(0,0,0,0.3);
         color: white;
