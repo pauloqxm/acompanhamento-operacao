@@ -16,7 +16,7 @@ import altair as alt
 import streamlit.components.v1 as components
 
 # =========================
-# Config geral 
+# Config geral
 # =========================
 st.set_page_config(page_title="Perenização de Rios • Vazões", layout="wide")
 TZ = ZoneInfo("America/Fortaleza")
@@ -102,7 +102,7 @@ def gdrive_extract_id(url: str):
     return None
 
 def drive_image_urls(file_id: str):
-    """Thumb rápida e imagem grande (ambas retornam image/*, não HTML)."""
+    """Thumb e imagem grande (ambas image/*)."""
     thumb = f"https://drive.google.com/thumbnail?id={file_id}&sz=w480"
     big   = f"https://drive.google.com/thumbnail?id={file_id}&sz=w2048"
     return thumb, big
@@ -192,6 +192,50 @@ def load_geojson_safe(*candidates):
             except Exception:
                 pass
     return None
+
+def geojson_bounds(gj: dict):
+    """
+    Calcula bounds [ [min_lat,min_lon], [max_lat,max_lon] ] de um GeoJSON.
+    """
+    if not gj: 
+        return None
+
+    def walk_coords(coords):
+        # retorna lista de (lon, lat)
+        if isinstance(coords, (list, tuple)) and coords and isinstance(coords[0], (int, float)):
+            # coord única [lon, lat, ...]
+            return [(coords[0], coords[1])]
+        result = []
+        for c in coords:
+            result.extend(walk_coords(c))
+        return result
+
+    geoms = []
+    if gj.get("type") == "FeatureCollection":
+        geoms = [f.get("geometry") for f in gj.get("features", []) if f.get("geometry")]
+    elif gj.get("type") == "Feature":
+        geoms = [gj.get("geometry")]
+    else:
+        geoms = [gj]
+
+    min_lon, min_lat = 180.0, 90.0
+    max_lon, max_lat = -180.0, -90.0
+
+    for geom in geoms:
+        if not geom: 
+            continue
+        coords = geom.get("coordinates")
+        if coords is None:
+            continue
+        for lon, lat in walk_coords(coords):
+            if lon is None or lat is None:
+                continue
+            min_lon = min(min_lon, float(lon)); min_lat = min(min_lat, float(lat))
+            max_lon = max(max_lon, float(lon)); max_lat = max(max_lat, float(lat))
+
+    if min_lon == 180.0:
+        return None
+    return [[min_lat, min_lon], [max_lat, max_lon]]  # folium usa [lat, lon]
 
 # Caminhos possíveis (local e /mnt/data/)
 TRECHOS_CAND = ["trechos_perene.geojson", "/mnt/data/trechos_perene.geojson"]
@@ -335,12 +379,10 @@ def main():
         else:
             choice = st.selectbox("Escolha o que exibir", valid_options, index=0)
 
-            # Função que divide múltiplos links numa mesma célula
             def split_urls(cell: str):
                 parts = re.split(r"[,\n; ]+", cell.strip())
                 return [p.strip() for p in parts if p.strip().lower().startswith(("http://","https://"))]
 
-            # Construção dos itens preservando a LEGENDA por linha (Reservatório • Seção)
             items = []
             seen = set()
             cname = media_map[choice]
@@ -363,14 +405,12 @@ def main():
                     if "Video" in choice:
                         fid = gdrive_extract_id(u)
                         if fid:
-                            thumb, _ = drive_image_urls(fid)      # thumb do próprio Drive
-                            src = drive_video_embed(fid)           # iframe preview
+                            thumb, _ = drive_image_urls(fid)
+                            src = drive_video_embed(fid)
                             items.append({"thumb": thumb, "src": src, "caption": caption, "iframe": True})
                         else:
-                            # YouTube/Vimeo/MP4 direto (comportamento como iframe)
                             items.append({"thumb": u, "src": u, "caption": caption, "iframe": True})
                     else:
-                        # Imagens
                         fid = gdrive_extract_id(u)
                         if fid:
                             thumb, big = drive_image_urls(fid)
@@ -389,10 +429,10 @@ def main():
     st.subheader("Mapa das seções monitoradas")
     map_height = 520
 
-    start_lat, start_lon, start_zoom = -5.199, -39.292, 8
-    fmap = folium.Map(location=[start_lat, start_lon], zoom_start=start_zoom, control_scale=True, prefer_canvas=True)
+    # Mapa base (sem fit ainda)
+    fmap = folium.Map(location=[-5.199, -39.292], zoom_start=8, control_scale=True, prefer_canvas=True)
 
-    # Tiles com attribution correto (evita erro do Folium)
+    # Tiles (bases) com attribution
     folium.TileLayer("OpenStreetMap", name="OpenStreetMap").add_to(fmap)
     folium.TileLayer("CartoDB Positron", name="CartoDB Positron").add_to(fmap)
     folium.TileLayer("CartoDB Dark_Matter", name="CartoDB Dark Matter").add_to(fmap)
@@ -401,6 +441,11 @@ def main():
         name="OpenTopoMap",
         attr="Map data © OpenStreetMap contributors, SRTM | Map style © OpenTopoMap (CC-BY-SA)"
     ).add_to(fmap)
+
+    # FeatureGroups para poder ligar/desligar
+    fg_bacia   = folium.FeatureGroup(name="Bacia do Banabuiú", show=True)
+    fg_trechos = folium.FeatureGroup(name="Trechos Perene", show=True)
+    fg_pontos  = folium.FeatureGroup(name="Pontos de Medição", show=True)
 
     # GeoJSON camadas
     trechos = load_geojson_safe(*TRECHOS_CAND)
@@ -412,22 +457,27 @@ def main():
             name="Trechos Perene",
             style_function=lambda x: {"color":"#1f78b4","weight":3,"opacity":0.9},
             tooltip=GeoJsonTooltip(fields=[], aliases=[], sticky=False)
-        ).add_to(fmap)
+        ).add_to(fg_trechos)
+        fg_trechos.add_to(fmap)
     else:
         st.info("Camada 'trechos_perene.geojson' não encontrada.")
 
+    bacia_bounds = None
     if bacia:
         GeoJson(
             bacia,
             name="Bacia do Banabuiú",
             style_function=lambda x: {"color":"#33a02c","weight":2,"opacity":0.8, "fillOpacity":0.05}
-        ).add_to(fmap)
+        ).add_to(fg_bacia)
+        fg_bacia.add_to(fmap)
+        bacia_bounds = geojson_bounds(bacia)
     else:
         st.info("Camada 'bacia_banabuiu.geojson' não encontrada.")
 
     # Pontos
     lat_col = cols.get("lat")
     lon_col = cols.get("lon")
+    pts = []
     if lat_col and lon_col and lat_col in fdf.columns and lon_col in fdf.columns:
         def to_float(v):
             if v is None: return None
@@ -435,7 +485,6 @@ def main():
             try: return float(v)
             except: return None
 
-        pts = []
         for _, row in fdf.iterrows():
             lat = to_float(row.get(lat_col))
             lon = to_float(row.get(lon_col))
@@ -451,16 +500,22 @@ def main():
                 fill_opacity=0.9,
                 popup=folium.Popup(popup_html, max_width=300, parse_html=True),
                 tooltip=str(row.get(cols.get("secao",""), "Seção"))
-            ).add_to(fmap)
-            pts.append((lat,lon))
-
-        if pts:
-            fmap.fit_bounds([[min(p[0] for p in pts), min(p[1] for p in pts)],
-                             [max(p[0] for p in pts), max(p[1] for p in pts)]])
+            ).add_to(fg_pontos)
+            pts.append((lat, lon))
+        fg_pontos.add_to(fmap)
     else:
         st.warning("Colunas de Latitude/Longitude não identificadas automaticamente.", icon="⚠️")
 
-    LayerControl(collapsed=False).add_to(fmap)
+    # ---- FIT: prioriza a Bacia; se ausente, usa pontos; senão mantém default
+    if bacia_bounds:
+        fmap.fit_bounds(bacia_bounds)
+    elif pts:
+        fmap.fit_bounds([[min(p[0] for p in pts), min(p[1] for p in pts)],
+                         [max(p[0] for p in pts), max(p[1] for p in pts)]])
+
+    # Botão de seleção de camadas (colapsado = aparece como botão)
+    LayerControl(collapsed=True, position="topright").add_to(fmap)
+
     st_folium(fmap, height=map_height, use_container_width=True)
 
     # =========================
