@@ -10,11 +10,12 @@ from zoneinfo import ZoneInfo
 
 import folium
 from folium import GeoJson, GeoJsonTooltip, LayerControl
+from folium.features import CustomIcon   # <-- ícone personalizado
 from streamlit_folium import st_folium
 
 import altair as alt
 import streamlit.components.v1 as components
-from branca.element import IFrame  # <-- para popups com HTML
+from branca.element import IFrame        # <-- popup HTML em IFrame
 
 # =========================
 # Config geral
@@ -25,14 +26,12 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Esconder a barra lateral completamente
+# Esconder a barra lateral e header
 st.markdown("""
     <style>
-        /* Esconde a barra lateral (se por acaso for ativada) */
         .css-1d391kg {display: none;}
         section[data-testid="stSidebar"] {display: none;}
         .css-1lcbmhc {display: none;}
-        /* Esconde o menu de opções do Streamlit (hambúrguer) e o header */
         header {visibility: hidden;} 
         .css-1rs6os {visibility: hidden;}
         .css-17ziqus {visibility: hidden;}
@@ -40,6 +39,9 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 TZ = ZoneInfo("America/Fortaleza")
+
+# Ícone personalizado dos pontos
+ICON_URL = "https://i.ibb.co/kgbmmjWc/location-icon-242304.png"
 
 # =========================
 # Utilidades
@@ -297,9 +299,7 @@ def load_geojson_safe(*candidates):
     return None
 
 def geojson_bounds(gj: dict):
-    """
-    Calcula bounds [ [min_lat,min_lon], [max_lat,max_lon] ] de um GeoJSON.
-    """
+    """Calcula bounds [[min_lat,min_lon],[max_lat,max_lon]] de um GeoJSON."""
     if not gj: 
         return None
 
@@ -336,7 +336,7 @@ def geojson_bounds(gj: dict):
 
     if min_lon == 180.0:
         return None
-    return [[min_lat, min_lon], [max_lat, max_lon]]  # folium usa [lat, lon]
+    return [[min_lat, min_lon], [max_lat, max_lon]]
 
 # Caminhos possíveis (local e /mnt/data/)
 TRECHOS_CAND = ["trechos_perene.geojson", "/mnt/data/trechos_perene.geojson"]
@@ -355,13 +355,13 @@ def main():
             color: white;text-align: center;box-shadow: 0 4px 20px rgba(0,0,0,0.15);
         ">
             <h1 style="margin:0;font-size: 2.5rem;font-weight:700;">🌊 Monitoramento de Vazões</h1>
-            <p style="margin:0.5rem 0 0 0;font-size:1.2rem;opacity:0.9;">Perenização de Rios • Sistema de Análise de Dados</p>
+            <p style="margin:0.5rem 0 0 0;font-size:1.2rem;opacity: 0.9;">Perenização de Rios • Sistema de Análise de Dados</p>
         </div>
     """, unsafe_allow_html=True)
     
     st.caption(f"🕐 Última atualização dos dados: {datetime.now(TZ).strftime('%d/%m/%Y %H:%M:%S')} — Fuso America/Fortaleza")
 
-    # Carregamento automático do Google Sheets (configuração simplificada)
+    # Carregamento automático do Google Sheets
     SHEET_ID = "1YstNFY5ehrOUjg_AoSztcqq466uRwstKY7gpvs0BWnI"
     GID = "0"
     SEP = ","
@@ -398,13 +398,9 @@ def main():
 
             col1, col2, col3, col4 = st.columns(4)
             with col1:
-                data_ini = st.date_input("**Data inicial**", 
-                                        value=min_d.date() if pd.notna(min_d) else date.today(),
-                                        help="Data inicial do período")
+                data_ini = st.date_input("**Data inicial**", value=min_d.date() if pd.notna(min_d) else date.today())
             with col2:
-                data_fim = st.date_input("**Data final**", 
-                                        value=max_d.date() if pd.notna(max_d) else date.today(),
-                                        help="Data final do período")
+                data_fim = st.date_input("**Data final**", value=max_d.date() if pd.notna(max_d) else date.today())
         else:
             col1, col2, col3, col4 = st.columns(4)
             data_ini = data_fim = None
@@ -418,12 +414,12 @@ def main():
             return vals
 
         with col3:
-            camp = st.multiselect("**Campanha**", options_for("campanha"), help="Filtrar por campanha")
+            camp = st.multiselect("**Campanha**", options_for("campanha"))
         with col4:
-            rese = st.multiselect("**Reservatório/Sistema**", options_for("reservatorio"), help="Filtrar por reservatório")
+            rese = st.multiselect("**Reservatório/Sistema**", options_for("reservatorio"))
         
         secao_opts = options_for("secao")
-        sec_sel = st.multiselect("**Seção**", secao_opts, help="Filtrar por seção específica")
+        sec_sel = st.multiselect("**Seção**", secao_opts)
 
     # Aplicar filtros
     fdf = df.copy()
@@ -551,39 +547,47 @@ def main():
     # =========================
     st.markdown("---")
     st.subheader("🗺️ Mapa das Seções Monitoradas")
+
+    # Opções do mapa (ajustes do popup e do ícone)
+    with st.container():
+        c1, c2, c3, c4 = st.columns([1,1,1,1])
+        with c1:
+            auto_popup = st.checkbox("Ajuste automático do popup", value=True)
+        with c2:
+            popup_width = st.slider("Largura do popup (px)", 260, 520, 360, 10, disabled=auto_popup)
+        with c3:
+            popup_height_slider = st.slider("Altura do popup (px)", 160, 600, 300, 10, disabled=auto_popup)
+        with c4:
+            use_icon = st.checkbox("Usar ícone nos pontos", value=True)
+    with st.container():
+        c5, c6 = st.columns([1,1])
+        with c5:
+            icon_w = st.slider("Tamanho do ícone (px)", 16, 64, 32, 2, disabled=not use_icon)
+        with c6:
+            icon_h = st.slider("Altura do ícone (px)", 16, 64, 32, 2, disabled=not use_icon)
+
     map_height = 520
+    fmap = folium.Map(location=[-5.199, -39.292], zoom_start=8, control_scale=True, prefer_canvas=True, tiles=None)
 
-    # Mapa base (tiles=None para adicionarmos camadas explicitamente)
-    fmap = folium.Map(
-        location=[-5.199, -39.292], 
-        zoom_start=8, 
-        control_scale=True, 
-        prefer_canvas=True,
-        tiles=None
-    )
-
-    # Camadas base com attribution correto
+    # Camadas base
     folium.TileLayer("CartoDB Positron", name="🗺️ CartoDB Positron").add_to(fmap)
     folium.TileLayer("OpenStreetMap", name="🌍 OpenStreetMap").add_to(fmap)
-    # ⛰️ Stamen Terrain com attribution explícito
     folium.TileLayer(
         tiles="https://stamen-tiles.a.ssl.fastly.net/terrain/{z}/{x}/{y}.png",
         name="⛰️ Stamen Terrain",
         attr="Map tiles by Stamen Design (CC BY 3.0) — Data © OpenStreetMap contributors"
     ).add_to(fmap)
-    # 🛰️ Imagem de satélite (Esri World Imagery)
     folium.TileLayer(
         tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
         name="🛰️ Esri World Imagery",
         attr="Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community"
     ).add_to(fmap)
 
-    # FeatureGroups para poder ligar/desligar
+    # FeatureGroups
     fg_bacia   = folium.FeatureGroup(name="🏞️ Bacia do Banabuiú", show=True)
     fg_trechos = folium.FeatureGroup(name="🌊 Trechos Perene", show=True)
     fg_pontos  = folium.FeatureGroup(name="📍 Pontos de Medição", show=True)
 
-    # GeoJSON camadas
     trechos = load_geojson_safe(*TRECHOS_CAND)
     bacia   = load_geojson_safe(*BACIA_CAND)
 
@@ -591,12 +595,7 @@ def main():
         GeoJson(
             trechos,
             name="Trechos Perene",
-            style_function=lambda x: {
-                "color": "#3498db",
-                "weight": 4,
-                "opacity": 0.9,
-                "dashArray": "5, 5"
-            },
+            style_function=lambda x: {"color": "#3498db", "weight": 4, "opacity": 0.9, "dashArray": "5, 5"},
             tooltip=GeoJsonTooltip(fields=[], aliases=[], sticky=False)
         ).add_to(fg_trechos)
         fg_trechos.add_to(fmap)
@@ -606,13 +605,7 @@ def main():
         GeoJson(
             bacia,
             name="Bacia do Banabuiú",
-            style_function=lambda x: {
-                "color": "#27ae60",
-                "weight": 3,
-                "opacity": 0.8, 
-                "fillOpacity": 0.05,
-                "fillColor": "#27ae60"
-            }
+            style_function=lambda x: {"color": "#27ae60", "weight": 3, "opacity": 0.8, "fillOpacity": 0.05, "fillColor": "#27ae60"}
         ).add_to(fg_bacia)
         fg_bacia.add_to(fmap)
         bacia_bounds = geojson_bounds(bacia)
@@ -633,41 +626,66 @@ def main():
             lon = to_float(row.get(lon_col))
             if lat is None or lon is None:
                 continue
-            
-            popup_html = make_popup_html(row, cols)
-            # --- Popup via IFrame (corrige exibição do HTML) ---
-            popup_width, popup_height = 360, 300
-            iframe = IFrame(html=popup_html, width=popup_width, height=popup_height)
-            popup = folium.Popup(iframe, max_width=popup_width)
 
-            folium.CircleMarker(
-                location=[lat, lon],
-                radius=10, 
-                color="#FF5733", 
-                fill=True,
-                fill_color="#FF5733",
-                fill_opacity=0.9, 
-                weight=3, 
-                popup=popup,
-                tooltip=f"📍 {str(row.get(cols.get('secao',''), 'Seção'))}",
-            ).add_to(fg_pontos)
+            popup_html = make_popup_html(row, cols)
+
+            # Altura do popup: automática (em função do conteúdo) ou fixa via slider
+            if auto_popup:
+                # Conta campos presentes para estimar altura
+                n = 0
+                if cols.get("data") and pd.notna(row.get(cols["data"])): n += 1
+                for k in ["campanha", "reservatorio", "secao", "vazao"]:
+                    c = cols.get(k)
+                    if c and pd.notna(row.get(c)): n += 1
+                # base + por linha (ajuste fino se quiser)
+                popup_width_cur = 360
+                popup_height_cur = 180 + n * 28
+            else:
+                popup_width_cur = popup_width
+                popup_height_cur = popup_height_slider
+
+            iframe = IFrame(html=popup_html, width=popup_width_cur, height=popup_height_cur)
+            popup = folium.Popup(iframe, max_width=popup_width_cur)
+
+            if use_icon:
+                # Marcador com ícone personalizado
+                icon = CustomIcon(
+                    icon_image=ICON_URL,
+                    icon_size=(icon_w, icon_h),
+                    icon_anchor=(icon_w // 2, icon_h)  # âncora na base central
+                )
+                folium.Marker(
+                    location=[lat, lon],
+                    icon=icon,
+                    popup=popup,
+                    tooltip=f"📍 {str(row.get(cols.get('secao',''), 'Seção'))}",
+                ).add_to(fg_pontos)
+            else:
+                # Fallback: círculo
+                folium.CircleMarker(
+                    location=[lat, lon],
+                    radius=10, color="#FF5733",
+                    fill=True, fill_color="#FF5733", fill_opacity=0.9, weight=3,
+                    popup=popup,
+                    tooltip=f"📍 {str(row.get(cols.get('secao',''), 'Seção'))}",
+                ).add_to(fg_pontos)
+
             pts.append((lat, lon))
+
         fg_pontos.add_to(fmap)
 
-    # FIT: prioriza a Bacia; se ausente, usa pontos; senão mantém default
+    # Fit: prioriza a Bacia; se ausente, usa pontos
     if bacia_bounds:
         fmap.fit_bounds(bacia_bounds)
     elif pts:
         fmap.fit_bounds([[min(p[0] for p in pts), min(p[1] for p in pts)],
                          [max(p[0] for p in pts), max(p[1] for p in pts)]])
 
-    # Botão de seleção de camadas (colapsado = vira botão)
     LayerControl(collapsed=True, position="topright").add_to(fmap)
-
     st_folium(fmap, height=map_height, use_container_width=True)
 
     # =========================
-    # GRÁFICOS (Data, Seção, Vazão medida)
+    # GRÁFICOS
     # =========================
     st.markdown("---")
     st.subheader("📈 Análises Gráficas")
@@ -681,8 +699,7 @@ def main():
         line = alt.Chart(gdf).mark_line(point=True, strokeWidth=3).encode(
             x=alt.X(f"{cols['data']}:T", title="Data", axis=alt.Axis(labelAngle=-45)),
             y=alt.Y(f"{cols['vazao']}:Q", title="Vazão medida (m³/s)"),
-            color=alt.Color(f"{cols['secao']}:N", title="Seção", 
-                            scale=alt.Scale(scheme='set1')), 
+            color=alt.Color(f"{cols['secao']}:N", title="Seção", scale=alt.Scale(scheme='set1')), 
             tooltip=[
                 alt.Tooltip(cols["data"], title="Data", format="%Y-%m-%d"),
                 alt.Tooltip(cols["secao"], title="Seção"),
