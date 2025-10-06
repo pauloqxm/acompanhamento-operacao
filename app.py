@@ -538,7 +538,7 @@ def main():
                             items.append({"thumb": u, "src": u, "caption": caption, "iframe": False})
 
             if items:
-                render_lightgallery_mixed(items, height_px=380)
+                render_lightgallery_mixed(items, height_px=340)
             else:
                 st.info("📭 Sem mídias para exibir nessa coluna. Verifique se os links apontam para arquivos do Drive (não pastas) e se estão compartilhados como 'qualquer pessoa com o link'.")
 
