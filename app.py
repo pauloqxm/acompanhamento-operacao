@@ -487,10 +487,10 @@ def main():
         st.markdown("**🖼️ Galeria de Mídias**")
 
         media_map = {
-            "Foto do local_URL": cols.get("foto1"),
-            "Foto (02)_URL":    cols.get("foto2"),
-            "Foto (03)_URL":    cols.get("foto3"),
-            "Video do Local_URL": cols.get("video"),
+            "Foto Principal": cols.get("foto1"),
+            "Foto (02)":    cols.get("foto2"),
+            "Foto (03)":    cols.get("foto3"),
+            "Video do Local": cols.get("video"),
         }
         valid_options = [label for label, cname in media_map.items() if cname and cname in fdf.columns]
         if not valid_options:
