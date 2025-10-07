@@ -768,130 +768,110 @@ def main():
             else:
                 st.info("📭 Sem mídias para exibir nessa coluna. Verifique se os links estão públicos no Drive.")
 
-# =========================
-# MAPA — Folium (wide)
-# =========================
+    # =========================
+    # MAPA — Folium (wide)
+    # =========================
     st.markdown("---")
     st.subheader("🗺️ Mapa das Seções Monitoradas")
 
-    # Assinatura simples do estado atual (mude se quiser incluir mais coisas)
-    map_sig = (
-        f"{len(fdf)}|{data_ini}|{data_fim}|"
-        f"{','.join(sorted(map(str, camp)))}|"
-        f"{','.join(sorted(map(str, rese)))}|"
-        f"{','.join(sorted(map(str, sec_sel)))}"
-    )
+    fmap = folium.Map(location=[-5.199, -39.292], zoom_start=8, control_scale=True, prefer_canvas=True, tiles=None)
 
-    def _build_map(fdf, cols):
-        fmap = folium.Map(location=[-5.199, -39.292], zoom_start=8,
-                          control_scale=True, prefer_canvas=True, tiles=None)
+    # Bases
+    folium.TileLayer("CartoDB Positron", name="🗺️ CartoDB Positron").add_to(fmap)
+    folium.TileLayer("OpenStreetMap", name="🌍 OpenStreetMap").add_to(fmap)
+    folium.TileLayer(
+        tiles="https://stamen-tiles.a.ssl.fastly.net/terrain/{z}/{x}/{y}.png",
+        name="⛰️ Stamen Terrain",
+        attr="Map tiles by Stamen Design (CC BY 3.0) — Data © OpenStreetMap contributors"
+    ).add_to(fmap)
+    folium.TileLayer(
+        tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        name="🛰️ Esri World Imagery",
+        attr="Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community"
+    ).add_to(fmap)
 
-        # Bases
-        folium.TileLayer("CartoDB Positron", name="🗺️ CartoDB Positron").add_to(fmap)
-        folium.TileLayer("OpenStreetMap", name="🌍 OpenStreetMap").add_to(fmap)
-        folium.TileLayer(
-            tiles="https://stamen-tiles.a.ssl.fastly.net/terrain/{z}/{x}/{y}.png",
-            name="⛰️ Stamen Terrain",
-            attr="Map tiles by Stamen Design (CC BY 3.0) — Data © OpenStreetMap contributors"
-        ).add_to(fmap)
-        folium.TileLayer(
-            tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-            name="🛰️ Esri World Imagery",
-            attr="Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community"
-        ).add_to(fmap)
+    # Grupos
+    fg_bacia   = folium.FeatureGroup(name="🏞️ Bacia do Banabuiú", show=True)
+    fg_trechos = folium.FeatureGroup(name="🌊 Trechos Perene", show=True)
+    fg_pontos  = folium.FeatureGroup(name="📍 Pontos de Medição", show=True)
 
-        # Grupos
-        fg_bacia   = folium.FeatureGroup(name="🏞️ Bacia do Banabuiú", show=True)
-        fg_trechos = folium.FeatureGroup(name="🌊 Trechos Perene", show=True)
-        fg_pontos  = folium.FeatureGroup(name="📍 Pontos de Medição", show=True)
+    trechos = load_geojson_safe(*TRECHOS_CAND)
+    bacia   = load_geojson_safe(*BACIA_CAND)
 
-        # GeoJSONs (carrega só quando reconstrói)
-        trechos = load_geojson_safe(*TRECHOS_CAND)
-        bacia   = load_geojson_safe(*BACIA_CAND)
+    if trechos:
+        GeoJson(
+            trechos,
+            name="Trechos Perene",
+            style_function=lambda x: {"color": "#3498db", "weight": 4, "opacity": 0.9, "dashArray": "5, 5"},
+            tooltip=GeoJsonTooltip(fields=[], aliases=[], sticky=False)
+        ).add_to(fg_trechos)
+        fg_trechos.add_to(fmap)
 
-        if trechos:
-            GeoJson(
-                trechos,
-                name="Trechos Perene",
-                style_function=lambda x: {"color": "#3498db", "weight": 4, "opacity": 0.9, "dashArray": "5, 5"},
-                tooltip=GeoJsonTooltip(fields=[], aliases=[], sticky=False)
-            ).add_to(fg_trechos)
-            fg_trechos.add_to(fmap)
+    bacia_bounds = None
+    if bacia:
+        GeoJson(
+            bacia,
+            name="Bacia do Banabuiú",
+            style_function=lambda x: {"color": "#27ae60", "weight": 3, "opacity": 0.8, "fillOpacity": 0.05, "fillColor": "#27ae60"}
+        ).add_to(fg_bacia)
+        fg_bacia.add_to(fmap)
+        bacia_bounds = geojson_bounds(bacia)
 
-        bacia_bounds = None
-        if bacia:
-            GeoJson(
-                bacia,
-                name="Bacia do Banabuiú",
-                style_function=lambda x: {"color": "#27ae60", "weight": 3, "opacity": 0.8, "fillOpacity": 0.05, "fillColor": "#27ae60"}
-            ).add_to(fg_bacia)
-            fg_bacia.add_to(fmap)
-            bacia_bounds = geojson_bounds(bacia)
+    # Pontos
+    lat_col = cols.get("lat")
+    lon_col = cols.get("lon")
+    pts = []
+    if lat_col and lon_col and lat_col in fdf.columns and lon_col in fdf.columns:
+        def to_float(v):
+            if v is None: return None
+            if isinstance(v, str): v = v.replace(",", ".")
+            try: return float(v)
+            except: return None
 
-        # Pontos
-        lat_col = cols.get("lat")
-        lon_col = cols.get("lon")
-        pts = []
-        if lat_col and lon_col and lat_col in fdf.columns and lon_col in fdf.columns:
-            def to_float(v):
-                if v is None: return None
-                if isinstance(v, str): v = v.replace(",", ".")
-                try: return float(v)
-                except: return None
+        for _, row in fdf.iterrows():
+            lat = to_float(row.get(lat_col))
+            lon = to_float(row.get(lon_col))
+            if lat is None or lon is None:
+                continue
 
-            for _, row in fdf.iterrows():
-                lat = to_float(row.get(lat_col))
-                lon = to_float(row.get(lon_col))
-                if lat is None or lon is None:
-                    continue
+            popup_html = make_popup_html(row, cols)
+            iframe = IFrame(html=popup_html, width=POPUP_WIDTH, height=POPUP_HEIGHT)
+            popup = folium.Popup(iframe, max_width=POPUP_WIDTH)
 
-                popup_html = make_popup_html(row, cols)
-                iframe = IFrame(html=popup_html, width=POPUP_WIDTH, height=POPUP_HEIGHT)
-                popup = folium.Popup(iframe, max_width=POPUP_WIDTH)
+            if USE_ICON:
+                icon = CustomIcon(
+                    icon_image=ICON_URL,
+                    icon_size=(ICON_W, ICON_H),
+                    icon_anchor=(ICON_W // 2, ICON_H)
+                )
+                folium.Marker(
+                    location=[lat, lon],
+                    icon=icon,
+                    popup=popup,
+                    tooltip=f"📍 {str(row.get(cols.get('secao',''), 'Seção'))}",
+                ).add_to(fg_pontos)
+            else:
+                folium.CircleMarker(
+                    location=[lat, lon],
+                    radius=10, color="#FF5733",
+                    fill=True, fill_color="#FF5733", fill_opacity=0.9, weight=3,
+                    popup=popup,
+                    tooltip=f"📍 {str(row.get(cols.get('secao',''), 'Seção'))}",
+                ).add_to(fg_pontos)
 
-                if USE_ICON:
-                    icon = CustomIcon(
-                        icon_image=ICON_URL,
-                        icon_size=(ICON_W, ICON_H),
-                        icon_anchor=(ICON_W // 2, ICON_H)
-                    )
-                    folium.Marker(
-                        location=[lat, lon],
-                        icon=icon,
-                        popup=popup,
-                        tooltip=f"📍 {str(row.get(cols.get('secao',''), 'Seção'))}",
-                    ).add_to(fg_pontos)
-                else:
-                    folium.CircleMarker(
-                        location=[lat, lon],
-                        radius=10, color="#FF5733",
-                        fill=True, fill_color="#FF5733", fill_opacity=0.9, weight=3,
-                        popup=popup,
-                        tooltip=f"📍 {str(row.get(cols.get('secao',''), 'Seção'))}",
-                    ).add_to(fg_pontos)
+            pts.append((lat, lon))
 
-                pts.append((lat, lon))
+        fg_pontos.add_to(fmap)
 
-            fg_pontos.add_to(fmap)
+    # Fit
+    if bacia_bounds:
+        fmap.fit_bounds(bacia_bounds)
+    elif pts:
+        fmap.fit_bounds([[min(p[0] for p in pts), min(p[1] for p in pts)],
+                         [max(p[0] for p in pts), max(p[1] for p in pts)]])
 
-        # Fit apenas na construção
-        if bacia_bounds:
-            fmap.fit_bounds(bacia_bounds)
-        elif pts:
-            fmap.fit_bounds([[min(p[0] for p in pts), min(p[1] for p in pts)],
-                            [max(p[0] for p in pts), max(p[1] for p in pts)]])
-
-        LayerControl(collapsed=True, position="topright").add_to(fmap)
-        return fmap
-
-    # Recria o mapa somente quando algo relevante muda
-    if ("map_sig" not in st.session_state) or (st.session_state["map_sig"] != map_sig) or ("fmap" not in st.session_state):
-        st.session_state["fmap"] = _build_map(fdf, cols)
-        st.session_state["map_sig"] = map_sig
-
-    # Exibe com key fixa para não trocar a identidade do widget
-    st_folium(st.session_state["fmap"], height=MAP_HEIGHT, use_container_width=True, key="main_map")
-
+    LayerControl(collapsed=True, position="topright").add_to(fmap)
+    st_folium(fmap, height=MAP_HEIGHT, use_container_width=True)
 
     # =========================
     # GRÁFICOS
