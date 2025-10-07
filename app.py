@@ -16,7 +16,6 @@ from streamlit_folium import st_folium
 import altair as alt
 import streamlit.components.v1 as components
 from branca.element import IFrame  # popups HTML
-import uuid  # garantir este import no topo do arquivo
 
 # =========================
 # Config geral
@@ -212,9 +211,8 @@ def render_lightgallery_mixed(items: list, height_px=440):
     components.html(html, height=height_px, scrolling=True)
 
 # =========================================================================================
-# POPUP estilizado (fotos + vídeos com miniaturas e lightbox)
+# POPUP estilizado
 # =========================================================================================
-
 def make_popup_html(row, cols):
     safe = lambda x: "-" if (x is None or (isinstance(x,float) and math.isnan(x))) else str(x)
     labels = {
@@ -226,7 +224,7 @@ def make_popup_html(row, cols):
     }
     icons = {"data":"📅","campanha":"🏷️","reservatorio":"💧","secao":"📍","vazao":"🌊"}
 
-    # --- DATA formatada ---
+    # Data formatada
     date_col = cols.get("data")
     data_part = ''
     if date_col and date_col in row and pd.notna(row[date_col]):
@@ -242,7 +240,6 @@ def make_popup_html(row, cols):
         except:
             pass
 
-    # --- CAMPOS principais ---
     parts = []
     for k in ["campanha", "reservatorio", "secao", "vazao"]:
         colname = cols.get(k)
@@ -263,197 +260,9 @@ def make_popup_html(row, cols):
                     <span style="font-weight:bold;text-align:right;">{value}</span>
                 </div>
             ''')
+
     content_html = '\n'.join(parts)
 
-    # --- Funções auxiliares ---
-    def split_urls(cell: str):
-        if not isinstance(cell, str):
-            return []
-        parts = re.split(r"[,\n; ]+", cell.strip())
-        return [p.strip() for p in parts if p.strip().lower().startswith(("http://", "https://"))]
-
-    def is_direct_video(url: str) -> bool:
-        low = url.lower()
-        return any(low.endswith(ext) for ext in (".mp4", ".webm", ".ogg", ".ogv"))
-
-    # --- Coleta FOTOS ---
-    photo_cols = [cols.get("foto1"), cols.get("foto2"), cols.get("foto3")]
-    photo_cols = [c for c in photo_cols if c and c in row]
-    photo_items = []  # (thumb_url, full_url)
-    seen = set()
-    for c in photo_cols:
-        for u in split_urls(row.get(c)):
-            if u in seen:
-                continue
-            seen.add(u)
-            fid = gdrive_extract_id(u)
-            if fid:
-                thumb, big = drive_image_urls(fid)
-                photo_items.append((thumb, big))
-            else:
-                photo_items.append((u, u))
-
-    # --- Coleta VÍDEOS ---
-    video_col = cols.get("video")
-    video_items = []  # ('drive'|'direct'|'other', thumb, target) -> target: iframe src (drive) ou video src (direct) ou href (other)
-    if video_col and video_col in row:
-        for u in split_urls(row.get(video_col)):
-            fid = gdrive_extract_id(u)
-            if fid:
-                # Google Drive: usa thumb e preview incorporado
-                thumb, _ = drive_image_urls(fid)
-                video_items.append(("drive", thumb, drive_video_embed(fid)))
-            elif is_direct_video(u):
-                # Vídeo direto: usa a própria URL como src; thumb genérica
-                # (Se quiser, defina um poster; aqui usamos a própria URL como fallback)
-                video_items.append(("direct", None, u))
-            else:
-                # Outras plataformas (ex.: YouTube) – deixa link clicável
-                video_items.append(("other", None, u))
-
-    # --- Montagem da galeria (limites) ---
-    MAX_PHOTOS = 6
-    MAX_VIDEOS = 2
-    photo_items = photo_items[:MAX_PHOTOS]
-    video_items = video_items[:MAX_VIDEOS]
-
-    # --- HTML/CSS do lightbox (fotos + vídeos) ---
-    uid = f"gal_{uuid.uuid4().hex[:8]}"
-    thumbs_html = []
-    modals_html = []
-
-    # Fotos -> miniaturas + modais de imagem
-    for idx, (thumb, full) in enumerate(photo_items, start=1):
-        anchor_id = f"{uid}_img{idx}"
-        thumbs_html.append(f'''
-            <a href="#{anchor_id}" class="thumb-link" title="Abrir foto">
-                <img src="{thumb}" alt="Foto {idx}" class="thumb-img" loading="lazy"/>
-            </a>
-        ''')
-        modals_html.append(f'''
-            <div id="{anchor_id}" class="lgbox">
-              <a href="#" class="lgbox-close" title="Fechar">&times;</a>
-              <img src="{full}" alt="Imagem ampliada {idx}" class="lgbox-media"/>
-            </div>
-        ''')
-
-    # Vídeos -> miniaturas + modais de vídeo
-    for jdx, (vtype, thumb, target) in enumerate(video_items, start=1):
-        anchor_id = f"{uid}_vid{jdx}"
-        # Miniatura do vídeo
-        if vtype == "drive":
-            thumb_html = f'<img src="{thumb}" alt="Vídeo {jdx}" class="thumb-img" loading="lazy"/>'
-        elif vtype == "direct":
-            # Sem thumb dedicada: usa bloco com ícone ▶
-            thumb_html = f'<div class="thumb-video-fallback">▶</div>'
-        else:
-            # other (ex.: YouTube) – mostra botão/link
-            thumbs_html.append(f'''
-                <a href="{target}" target="_blank" rel="noopener" class="thumb-link-out" title="Abrir vídeo">
-                    <span>▶ Abrir vídeo</span>
-                </a>
-            ''')
-            continue  # sem modal interno
-
-        # botão com overlay play
-        thumbs_html.append(f'''
-            <a href="#{anchor_id}" class="thumb-link video" title="Reproduzir vídeo">
-                {thumb_html}
-                <span class="play-badge">▶</span>
-            </a>
-        ''')
-
-        # Modal
-        if vtype == "drive":
-            # Iframe do Google Drive
-            modals_html.append(f'''
-                <div id="{anchor_id}" class="lgbox">
-                  <a href="#" class="lgbox-close" title="Fechar">&times;</a>
-                  <div class="lgbox-iframe-wrap">
-                    <iframe src="{target}" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen
-                            style="width:100%;height:100%;border:0;"></iframe>
-                  </div>
-                </div>
-            ''')
-        elif vtype == "direct":
-            # Player nativo
-            modals_html.append(f'''
-                <div id="{anchor_id}" class="lgbox">
-                  <a href="#" class="lgbox-close" title="Fechar">&times;</a>
-                  <video class="lgbox-media" src="{target}" controls playsinline></video>
-                </div>
-            ''')
-
-    # Se não houver nada, mostra mensagem
-    if not thumbs_html and not modals_html:
-        gallery_block = """
-        <div style="
-            margin-top:15px;padding:8px;background:rgba(255,255,255,0.1);border-radius:8px;
-            text-align:center;font-size:0.8em;opacity:0.9;font-style:italic;
-        ">
-            Sem mídias nesta medição.
-        </div>
-        """
-    else:
-        gallery_block = f"""
-        <style>
-          .thumb-grid {{
-            display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:flex-start;
-          }}
-          .thumb-link {{ display:inline-block; position:relative; border-radius:8px; overflow:hidden; }}
-          .thumb-img {{
-            height:64px; width:auto; display:block;
-            border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,.25);
-            transition: transform 0.2s ease;
-          }}
-          .thumb-link:hover .thumb-img {{ transform: scale(1.03); }}
-
-          .thumb-link.video .play-badge {{
-            position:absolute; inset:auto 6px 6px auto;
-            background:rgba(0,0,0,0.55); color:#fff;
-            border-radius:6px; padding:2px 6px; font-size:14px;
-            box-shadow:0 2px 6px rgba(0,0,0,.35);
-          }}
-          .thumb-video-fallback {{
-            height:64px; width:96px; display:flex; align-items:center; justify-content:center;
-            background:rgba(0,0,0,0.25); color:#fff; font-weight:700; border-radius:8px;
-            box-shadow:0 2px 8px rgba(0,0,0,.25);
-          }}
-
-          /* Lightbox */
-          .lgbox {{
-            position: fixed; z-index: 9999; inset: 0;
-            display: none; align-items: center; justify-content: center;
-            background: rgba(0,0,0,0.88); padding: 10px;
-          }}
-          .lgbox:target {{ display:flex; }}
-          .lgbox-close {{
-            position: absolute; top: 8px; right: 14px;
-            color: #fff; text-decoration: none; font-size: 36px; line-height: 1;
-            background: rgba(0,0,0,0.4); width: 42px; height: 42px; border-radius: 50%;
-            display:flex; align-items:center; justify-content:center;
-          }}
-          .lgbox-media {{
-            max-width: 95%; max-height: 90%;
-            border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.6);
-            background:#000;
-          }}
-          .lgbox-iframe-wrap {{
-            width: min(1000px, 95vw); height: min(560px, 90vh);
-            border-radius: 10px; overflow: hidden; background:#000;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.6);
-          }}
-        </style>
-        <div style="margin-top:12px;background:rgba(255,255,255,0.08);padding:8px;border-radius:10px;">
-            <div style="font-weight:600;margin-bottom:6px;opacity:0.95;">📷 Mídias</div>
-            <div class="thumb-grid">
-                {''.join(thumbs_html)}
-            </div>
-        </div>
-        {''.join(modals_html)}
-        """
-
-    # --- POPUP final ---
     popup_html = f"""
     <div style="
         font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -471,11 +280,15 @@ def make_popup_html(row, cols):
         </div>
         {data_part}
         {content_html}
-        {gallery_block}
+        <div style="
+            margin-top:15px;padding:8px;background:rgba(255,255,255,0.1);border-radius:8px;
+            text-align:center;font-size:0.8em;opacity:0.9;font-style:italic;
+        ">
+            Clique no marcador para abrir a galeria de mídias!
+        </div>
     </div>
     """
     return popup_html
-
 
 # =========================================================================================
 
