@@ -664,18 +664,24 @@ def main():
         gdf[cols['data']] = pd.to_datetime(gdf[cols['data']], errors='coerce')
         gdf_plot = gdf.dropna(subset=[cols['data'], cols['vazao']]).copy()
 
-        # Converter data para string formatada (dia/mês)
+        # Rótulo dd/mm e ordem cronológica real
         gdf_plot["data_str"] = gdf_plot[cols["data"]].dt.strftime("%d/%m")
+        domain_order = (
+            gdf_plot.sort_values(by=cols["data"])["data_str"]
+            .drop_duplicates()
+            .tolist()
+        )
 
         st.markdown("**📈 Vazão ao Longo do Tempo**")
 
-        # Gráfico com linha e pontos destacados
+        # Linha
         line = (
             alt.Chart(gdf_plot)
             .mark_line(strokeWidth=3)
             .encode(
                 x=alt.X(
                     "data_str:O",
+                    sort=domain_order,                 # 🔧 ordem cronológica
                     title="Data (dd/mm)",
                     axis=alt.Axis(labelAngle=0)
                 ),
@@ -689,12 +695,12 @@ def main():
             )
         )
 
-        # Pontos grandes e destacados
+        # Pontos destacados
         points = (
             alt.Chart(gdf_plot)
             .mark_point(size=80, filled=True)
             .encode(
-                x="data_str:O",
+                x=alt.X("data_str:O", sort=domain_order),  # 🔧 mesma ordem
                 y=f"{cols['vazao']}:Q",
                 color=alt.Color(f"{cols['secao']}:N", title="Seção", scale=alt.Scale(scheme='set1')),
                 tooltip=[
@@ -705,13 +711,8 @@ def main():
             )
         )
 
-        # Combinar linha + pontos
         chart = (line + points).properties(width="container", height=400).interactive()
-
         st.altair_chart(chart, use_container_width=True)
-
-
-
 
         # Boxplot — L/s
         st.markdown("**📊 Distribuição de Vazão por Seção**")
