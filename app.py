@@ -659,24 +659,35 @@ def main():
         gdf[cols["vazao"]] = pd.to_numeric(gdf[cols["vazao"]].astype(str).str.replace(",", "."), errors="coerce")
         gdf = gdf.dropna(subset=[cols["vazao"]])
 
-        # Vazão ao longo do tempo (mês) — L/s
+# Vazão ao longo do tempo (mês) — L/s
+# Garantir datetime e filtrar linhas válidas
+        gdf[cols['data']] = pd.to_datetime(gdf[cols['data']], errors='coerce')
+        gdf_plot = gdf.dropna(subset=[cols['data'], cols['vazao']]).copy()
+
         st.markdown("**📈 Vazão ao Longo do Tempo**")
-        line = alt.Chart(gdf).mark_line(point=True, strokeWidth=3).encode(
-            x=alt.X(
-                f"{cols['data']}:T",
-                title="Mês",
-                axis=alt.Axis(format="%b", labelAngle=0),
-                scale=alt.Scale(nice='month')
-            ),
-            y=alt.Y(f"{cols['vazao']}:Q", title="Vazão medida (L/s)"),
-            color=alt.Color(f"{cols['secao']}:N", title="Seção", scale=alt.Scale(scheme='set1')),
-            tooltip=[
-                alt.Tooltip(cols["data"], title="Data", format="%Y-%m-%d"),
-                alt.Tooltip(cols["secao"], title="Seção"),
-                alt.Tooltip(cols["vazao"], title="Vazão (L/s)", format=".2f")
-            ]
-        ).properties(width="container", height=400).interactive()
+        line = (
+            alt.Chart(gdf_plot)
+            .mark_line(point=True, strokeWidth=3)
+            .encode(
+                x=alt.X(
+                    f"{cols['data']}:T",
+                    title="Dia/Mês (dd/mm)",
+                    axis=alt.Axis(format="%d/%m", labelAngle=0)
+                ),
+                y=alt.Y(f"{cols['vazao']}:Q", title="Vazão medida (L/s)"),
+                color=alt.Color(f"{cols['secao']}:N", title="Seção", scale=alt.Scale(scheme='set1')),
+                tooltip=[
+                    alt.Tooltip(cols["data"], title="Data", format="%d/%m/%Y"),
+                    alt.Tooltip(cols["secao"], title="Seção"),
+                    alt.Tooltip(cols["vazao"], title="Vazão (L/s)", format=".2f")
+                ]
+            )
+            .properties(width="container", height=400)
+            .interactive()
+        )
+
         st.altair_chart(line, use_container_width=True)
+
 
         # Boxplot — L/s
         st.markdown("**📊 Distribuição de Vazão por Seção**")
