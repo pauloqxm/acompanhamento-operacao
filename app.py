@@ -473,18 +473,41 @@ def main():
     st.subheader("📋 Dados e Mídias")
     col_tab, col_media = st.columns([1, 1])
 
+    # ---------- Tabela ----------
     with col_tab:
         st.markdown("**📊 Tabela de Registros**")
+
+        display_df = fdf.copy()
+
+        # Garante formato dd/mm/aaaa
+        if cols.get("data") and cols["data"] in display_df.columns:
+            display_df["Data formatada"] = pd.to_datetime(display_df[cols["data"]], errors="coerce").dt.strftime("%d/%m/%Y")
+        else:
+            display_df["Data formatada"] = None
+
+        # Remove a primeira coluna se for puramente numérica (apenas na exibição)
+        if display_df.columns.size > 0:
+            first_col = display_df.columns[0]
+            try:
+                if display_df[first_col].dropna().astype(str).str.isnumeric().all():
+                    display_df = display_df.drop(columns=first_col)
+            except Exception:
+                pass
+
+        # Define as colunas a exibir na tabela
         table_cols = [
+            "Data formatada",
             cols.get("campanha"),
             cols.get("reservatorio"),
             cols.get("secao"),
             cols.get("vazao"),
             cols.get("obs"),
         ]
-        table_cols = [c for c in table_cols if c in fdf.columns and c is not None]
+        table_cols = [c for c in table_cols if c in display_df.columns and c is not None]
+
         if table_cols:
             renamed = {
+                "Data formatada": "Data da Medição",
                 cols.get("campanha",""): "Campanha",
                 cols.get("reservatorio",""): "Reservatório/Sistema",
                 cols.get("secao",""): "Seção",
@@ -492,13 +515,14 @@ def main():
                 cols.get("obs",""): "Observações",
             }
             st.dataframe(
-                fdf[table_cols].rename(columns=renamed),
+                display_df[table_cols].rename(columns=renamed),
                 use_container_width=True,
                 height=420
             )
         else:
             st.warning("⚠️ Não encontrei as colunas necessárias para a tabela solicitada.")
 
+    # ---------- Galeria de mídias ----------
     with col_media:
         st.markdown("**🖼️ Galeria de Mídias**")
 
