@@ -664,15 +664,20 @@ def main():
         gdf[cols['data']] = pd.to_datetime(gdf[cols['data']], errors='coerce')
         gdf_plot = gdf.dropna(subset=[cols['data'], cols['vazao']]).copy()
 
+        # Converter data para string formatada (dia/mês)
+        gdf_plot["data_str"] = gdf_plot[cols["data"]].dt.strftime("%d/%m")
+
         st.markdown("**📈 Vazão ao Longo do Tempo**")
+
+        # Gráfico com linha e pontos destacados
         line = (
             alt.Chart(gdf_plot)
-            .mark_line(point=True, strokeWidth=3)
+            .mark_line(strokeWidth=3)
             .encode(
                 x=alt.X(
-                    f"{cols['data']}:T",
-                    title="Dia/Mês (dd/mm)",
-                    axis=alt.Axis(format="%d/%m", labelAngle=0)
+                    "data_str:O",
+                    title="Data (dd/mm)",
+                    axis=alt.Axis(labelAngle=0)
                 ),
                 y=alt.Y(f"{cols['vazao']}:Q", title="Vazão medida (L/s)"),
                 color=alt.Color(f"{cols['secao']}:N", title="Seção", scale=alt.Scale(scheme='set1')),
@@ -682,11 +687,30 @@ def main():
                     alt.Tooltip(cols["vazao"], title="Vazão (L/s)", format=".2f")
                 ]
             )
-            .properties(width="container", height=400)
-            .interactive()
         )
 
-        st.altair_chart(line, use_container_width=True)
+        # Pontos grandes e destacados
+        points = (
+            alt.Chart(gdf_plot)
+            .mark_point(size=80, filled=True)
+            .encode(
+                x="data_str:O",
+                y=f"{cols['vazao']}:Q",
+                color=alt.Color(f"{cols['secao']}:N", title="Seção", scale=alt.Scale(scheme='set1')),
+                tooltip=[
+                    alt.Tooltip(cols["data"], title="Data", format="%d/%m/%Y"),
+                    alt.Tooltip(cols["secao"], title="Seção"),
+                    alt.Tooltip(cols["vazao"], title="Vazão (L/s)", format=".2f")
+                ]
+            )
+        )
+
+        # Combinar linha + pontos
+        chart = (line + points).properties(width="container", height=400).interactive()
+
+        st.altair_chart(chart, use_container_width=True)
+
+
 
 
         # Boxplot — L/s
