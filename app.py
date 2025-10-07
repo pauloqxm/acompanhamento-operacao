@@ -79,8 +79,9 @@ def normalize_col(s: str) -> str:
     return t
 
 @st.cache_data(show_spinner=False)
-def load_from_gsheet_csv(sheet_id: str, gid: str = "0", sep=","):
-    url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
+def load_from_gsheet_csv(sheet_id: str, gid: str = "0", sep=",", _bust: int = 0):
+    # _bust entra na URL para evitar cache intermediário do Google/CDN
+    url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}&_cachebust={_bust}"
     return pd.read_csv(url, sep=sep)
 
 def guess_columns(df: pd.DataFrame):
@@ -350,17 +351,30 @@ BACIA_CAND   = ["bacia_banabuiu.geojson", "/mnt/data/bacia_banabuiu.geojson",
 # App
 # =========================
 def main():
-    # Header
-    st.markdown("""
-        <div style="
-            background: linear-gradient(135deg, #0f4c75 0%, #3282b8 100%);
-            padding: 2rem;border-radius: 0 0 20px 20px;margin: -1rem -1rem 2rem -1rem;
-            color: white;text-align: center;box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-        ">
-            <h1 style="margin:0;font-size: 2.5rem;font-weight:700;">🌊 Monitoramento de Vazões</h1>
-            <p style="margin:0.5rem 0 0 0;font-size:1.2rem;opacity: 0.9;">Perenização de Rios • Sistema de Análise de Dados</p>
-        </div>
-    """, unsafe_allow_html=True)
+    # Estado para cache busting e botão de atualização
+    if "cache_bust" not in st.session_state:
+        st.session_state["cache_bust"] = 0
+
+    # Header + botão de atualização lado a lado
+    top_l, top_r = st.columns([1, 0.25])
+    with top_l:
+        st.markdown("""
+            <div style="
+                background: linear-gradient(135deg, #0f4c75 0%, #3282b8 100%);
+                padding: 2rem;border-radius: 0 0 20px 20px;margin: -1rem -1rem 2rem -1rem;
+                color: white;text-align: center;box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            ">
+                <h1 style="margin:0;font-size: 2.5rem;font-weight:700;">🌊 Monitoramento de Vazões</h1>
+                <p style="margin:0.5rem 0 0 0;font-size:1.2rem;opacity: 0.9;">Perenização de Rios • Sistema de Análise de Dados</p>
+            </div>
+        """, unsafe_allow_html=True)
+    with top_r:
+        if st.button("🔄 Atualizar dados do Sheets", use_container_width=True, type="primary"):
+            # Limpa cache de dados
+            load_from_gsheet_csv.clear()
+            # Incrementa o bust para gerar nova chave de cache e furar caches externos
+            st.session_state["cache_bust"] += 1
+            st.rerun()
 
     st.caption(f"🕐 Última atualização dos dados: {datetime.now(TZ).strftime('%d/%m/%Y %H:%M:%S')} — Fuso America/Fortaleza")
 
@@ -370,7 +384,7 @@ def main():
     SEP = ","
 
     try:
-        df = load_from_gsheet_csv(SHEET_ID, GID, sep=SEP)
+        df = load_from_gsheet_csv(SHEET_ID, GID, sep=SEP, _bust=st.session_state.get("cache_bust", 0))
     except Exception as e:
         st.error(f"❌ Erro ao carregar do Google Sheets: {e}")
         return
@@ -659,8 +673,7 @@ def main():
         gdf[cols["vazao"]] = pd.to_numeric(gdf[cols["vazao"]].astype(str).str.replace(",", "."), errors="coerce")
         gdf = gdf.dropna(subset=[cols["vazao"]])
 
-# Vazão ao longo do tempo (mês) — L/s
-# Garantir datetime e filtrar linhas válidas
+        # Vazão ao longo do tempo — L/s (somente datas existentes, dd/mm, ordem cronológica e pontos grandes)
         gdf[cols['data']] = pd.to_datetime(gdf[cols['data']], errors='coerce')
         gdf_plot = gdf.dropna(subset=[cols['data'], cols['vazao']]).copy()
 
@@ -681,7 +694,7 @@ def main():
             .encode(
                 x=alt.X(
                     "data_str:O",
-                    sort=domain_order,                 # 🔧 ordem cronológica
+                    sort=domain_order,                 # ordem cronológica por rótulos
                     title="Data (dd/mm)",
                     axis=alt.Axis(labelAngle=0)
                 ),
@@ -700,7 +713,7 @@ def main():
             alt.Chart(gdf_plot)
             .mark_point(size=80, filled=True)
             .encode(
-                x=alt.X("data_str:O", sort=domain_order),  # 🔧 mesma ordem
+                x=alt.X("data_str:O", sort=domain_order),  # mesma ordem
                 y=f"{cols['vazao']}:Q",
                 color=alt.Color(f"{cols['secao']}:N", title="Seção", scale=alt.Scale(scheme='set1')),
                 tooltip=[
