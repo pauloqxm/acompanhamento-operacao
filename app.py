@@ -466,30 +466,16 @@ def main():
         </div>
     """, unsafe_allow_html=True)
 
-# =========================
-# TABELA + MÍDIAS
-# =========================
+    # =========================
+    # TABELA + MÍDIAS
+    # =========================
     st.markdown("---")
     st.subheader("📋 Dados e Mídias")
     col_tab, col_media = st.columns([1, 1])
 
-# TABELA  DE REGISTROS
     with col_tab:
         st.markdown("**📊 Tabela de Registros**")
-
-        # Garante que a data esteja no formato correto
-        if cols.get("data") and cols["data"] in fdf.columns:
-            fdf["Data formatada"] = pd.to_datetime(fdf[cols["data"]], errors="coerce").dt.strftime("%d/%m/%Y")
-        else:
-            fdf["Data formatada"] = None
-
-        # Remove a primeira coluna se for puramente numérica e irrelevante
-        if fdf.columns[0] and fdf[fdf.columns[0]].dropna().astype(str).str.isnumeric().all():
-            fdf = fdf.drop(columns=fdf.columns[0])
-
-        # Define as colunas a exibir na tabela
         table_cols = [
-            "Data formatada",
             cols.get("campanha"),
             cols.get("reservatorio"),
             cols.get("secao"),
@@ -497,24 +483,21 @@ def main():
             cols.get("obs"),
         ]
         table_cols = [c for c in table_cols if c in fdf.columns and c is not None]
-
         if table_cols:
             renamed = {
-                "Data formatada": "Data da Medição",
-                cols.get("campanha", ""): "Campanha",
-                cols.get("reservatorio", ""): "Reservatório/Sistema",
-            cols.get("secao", ""): "Seção",
-            cols.get("vazao", ""): "Vazão (L/s)",
-            cols.get("obs", ""): "Observações",
-        }
-        st.dataframe(
-            fdf[table_cols].rename(columns=renamed),
-            use_container_width=True,
-            height=420
-        )
-    else:
-        st.warning("⚠️ Não encontrei as colunas necessárias para a tabela solicitada.")
-
+                cols.get("campanha",""): "Campanha",
+                cols.get("reservatorio",""): "Reservatório/Sistema",
+                cols.get("secao",""): "Seção",
+                cols.get("vazao",""): "Vazão (L/s)",
+                cols.get("obs",""): "Observações",
+            }
+            st.dataframe(
+                fdf[table_cols].rename(columns=renamed),
+                use_container_width=True,
+                height=420
+            )
+        else:
+            st.warning("⚠️ Não encontrei as colunas necessárias para a tabela solicitada.")
 
     with col_media:
         st.markdown("**🖼️ Galeria de Mídias**")
