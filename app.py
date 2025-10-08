@@ -221,8 +221,9 @@ def make_popup_html(row, cols):
         "reservatorio": "Reservatório/Sistema",
         "secao": "Seção",
         "vazao": "Vazão medida",
+        "observacoes": "Observações",        
     }
-    icons = {"data":"📅","campanha":"🏷️","reservatorio":"💧","secao":"📍","vazao":"🌊"}
+    icons = {"data":"📅","campanha":"🏷️","reservatorio":"💧","secao":"📍","vazao":"🌊","observacoes":"⚠️"}
 
     # Data formatada
     date_col = cols.get("data")
