@@ -251,7 +251,25 @@ def make_popup_html(row, cols):
     }
     icons = {"data":"📅","campanha":"🏷️","reservatorio":"💧","secao":"📍","vazao":"🌊"}
 
-    # Data formatada
+    # ------------------ utilidades locais ------------------
+    def split_urls(cell: str):
+        if not isinstance(cell, str):
+            return []
+        parts = re.split(r"[,
+; ]+", cell.strip())
+        return [p.strip() for p in parts if p.strip().lower().startswith(("http://","https://"))]
+
+    def build_img_thumb_big(url: str):
+        """Retorna (thumb, big, is_video) para URLs diretas ou do Drive."""
+        fid = gdrive_extract_id(url)
+        if fid:
+            t, b = drive_image_urls(fid)
+            is_video = "/preview" in url or url.lower().endswith((".mp4",".mov",".webm"))
+            return (t, drive_video_embed(fid) if is_video else b, is_video)
+        is_video = url.lower().endswith((".mp4",".mov",".webm"))
+        return (url, url, is_video)
+
+    # ------------------ data formatada ------------------
     date_col = cols.get("data")
     data_part = ''
     if date_col and date_col in row and pd.notna(row[date_col]):
@@ -264,9 +282,10 @@ def make_popup_html(row, cols):
                 </div>
                 <div style="height:1px;background-color:rgba(255,255,255,0.2);margin:6px 0;"></div>
             '''
-        except:
+        except Exception:
             pass
 
+    # ------------------ blocos de texto ------------------
     parts = []
     for k in ["campanha", "reservatorio", "secao", "vazao"]:
         colname = cols.get(k)
@@ -288,7 +307,41 @@ def make_popup_html(row, cols):
                 </div>
             ''')
 
-    content_html = '\n'.join(parts)
+    content_html = '
+'.join(parts)
+
+    # ------------------ miniaturas (fotos) ------------------
+    thumb_items = []
+    # legenda curta com Reservatório • Seção
+    rlab = row.get(cols.get("reservatorio", ""))
+    slab = row.get(cols.get("secao", ""))
+    caption = " • ".join([x for x in [str(rlab) if rlab else None, str(slab) if slab else None] if x])
+
+    for k in ["foto1", "foto2", "foto3"]:
+        cname = cols.get(k)
+        if not cname or cname not in row:
+            continue
+        for u in split_urls(row.get(cname)):
+            t, b, is_video = build_img_thumb_big(u)
+            if is_video:
+                continue
+            thumb_items.append((t, b))
+
+    thumbs_html = ""
+    if thumb_items:
+        cards = []
+        for (t, b) in thumb_items:
+            cards.append(
+                f'''<a href="{b}" target="_blank" title="Clique para ampliar">
+                        <img src="{t}" alt="{caption}" style="height:64px;width:auto;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.25);margin:4px;border:1px solid rgba(255,255,255,.35)"/>
+                    </a>'''
+            )
+        thumbs_html = f'''
+            <div style="margin-top:10px">
+                <div style="font-size:0.9em;margin-bottom:6px;opacity:.95">📷 Miniaturas</div>
+                <div style="display:flex;flex-wrap:wrap;align-items:center;">{''.join(cards)}</div>
+            </div>
+        '''
 
     popup_html = f"""
     <div style="
@@ -307,11 +360,12 @@ def make_popup_html(row, cols):
         </div>
         {data_part}
         {content_html}
+        {thumbs_html}
         <div style="
-            margin-top:15px;padding:8px;background:rgba(255,255,255,0.1);border-radius:8px;
+            margin-top:12px;padding:8px;background:rgba(255,255,255,0.1);border-radius:8px;
             text-align:center;font-size:0.8em;opacity:0.9;font-style:italic;
         ">
-            Clique no marcador para abrir a galeria de mídias!
+            Clique nas miniaturas para ampliar em nova aba.
         </div>
     </div>
     """
