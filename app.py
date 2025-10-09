@@ -291,8 +291,8 @@ def make_popup_html(row, cols):
                     value = f'<span id="med-vazao" style="color:#FF5733;font-weight:700;">{value} L/s</span>'
             parts.append(f'<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:0.95em;"><span style="font-weight:500;">{icon} {label}:</span><span style="font-weight:bold;text-align:right;">{value}</span></div>')
 
-    content_html = '
-'.join(parts)
+    # >>>>>> LINHA CORRIGIDA AQUI <<<<<<
+    content_html = '\\n'.join(parts)
 
     # === seletor de data dentro do popup (somente se houver outras datas para a mesma seção) ===
     selector_html = ''
@@ -302,8 +302,6 @@ def make_popup_html(row, cols):
         vaz_col = cols.get('vazao')
         if sec_col and dat_col and vaz_col:
             sec_val = row.get(sec_col)
-            # usa fdf do escopo global de main via Streamlit session? fallback: None
-            # iremos buscar no próprio df filtrado se existir variável global
             from inspect import currentframe
             frame = currentframe()
             fdf_local = None
@@ -382,8 +380,6 @@ def make_popup_html(row, cols):
 
     popup_html = f"""<div style='font-family:Segoe UI, Tahoma, Geneva, Verdana, sans-serif;padding:15px;min-width:250px;max-width:350px;background:linear-gradient(135deg,#1abc9c 0%,#3498db 100%);border-radius:15px;box-shadow:0 10px 30px rgba(0,0,0,0.3);color:white;border:3px solid rgba(255,255,255,0.2);'><div style='background:rgba(255,255,255,0.15);padding:10px 15px;border-radius:10px;margin-bottom:15px;text-align:center;font-size:1.1em;font-weight:bold;letter-spacing:0.5px;text-shadow:1px 1px 2px rgba(0,0,0,0.2);'>Informações da Medição</div>{data_part}{content_html}{thumbs_html}<div style='margin-top:12px;padding:8px;background:rgba(255,255,255,0.1);border-radius:8px;text-align:center;font-size:0.8em;opacity:0.9;font-style:italic;'>Clique nas miniaturas para ampliar em nova aba.</div></div>"""
     return popup_html
-
-
 
 # =========================================================================================
 
