@@ -251,13 +251,13 @@ def make_popup_html(row, cols):
     }
     icons = {"data":"📅","campanha":"🏷️","reservatorio":"💧","secao":"📍","vazao":"🌊"}
 
-    # ------------------ utilidades locais ------------------
+# ------------------ utilidades locais ------------------
     def split_urls(cell: str):
         if not isinstance(cell, str):
             return []
-        parts = re.split(r"[,
-; ]+", cell.strip())
-        return [p.strip() for p in parts if p.strip().lower().startswith(("http://","https://"))]
+        parts = re.split(r"[,\\n; ]+", cell.strip())
+        return [p.strip() for p in parts if p.strip().lower().startswith(("http://", "https://"))]
+
 
     def build_img_thumb_big(url: str):
         """Retorna (thumb, big, is_video) para URLs diretas ou do Drive."""
