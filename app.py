@@ -286,7 +286,7 @@ def make_popup_html(row, cols):
                 try:
                     vazao_f = float(str(value).replace(',', '.'))
                     formatted_vazao = f"{vazao_f:,.2f} L/s".replace('.', '#').replace(',', '.').replace('#', ',')
-                    value = f'<span style="color:#82542b;font-weight:700;font-size:1.2em;">{formatted_vazao}</span>'
+                    value = f'<span style="color:#00c749;font-weight:700;font-size:1.2em;">{formatted_vazao}</span>'
                 except ValueError:
                     value = f'<span style="color:#FF5733;font-weight:700;">{value} L/s</span>'
             parts.append(f'<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:0.95em;"><span style="font-weight:500;">{icon} {label}:</span><span style="font-weight:bold;text-align:right;">{value}</span></div>')
