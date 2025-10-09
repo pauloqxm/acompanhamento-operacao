@@ -266,15 +266,17 @@ def make_popup_html(row, cols):
         is_video = url.lower().endswith((".mp4", ".mov", ".webm"))
         return (url, url, is_video)
 
+    # Data
     date_col = cols.get("data")
     data_part = ''
     if date_col and date_col in row and pd.notna(row[date_col]):
         try:
             data_medicao = row[date_col].strftime('%d/%m/%Y')
-            data_part = f'''<div style="display:flex;justify-content:space-between;padding-bottom:5px;font-size:0.9em;border-bottom:1px solid rgba(255,255,255,0.3);"><span>{icons['data']} {labels['data']}:</span><span style="font-weight:bold;color:#f1c40f;">{data_medicao}</span></div><div style="height:1px;background-color:rgba(255,255,255,0.2);margin:6px 0;"></div>'''
+            data_part = f'''<div style="display:flex;justify-content:space-between;padding-bottom:5px;font-size:0.9em;border-bottom:1px solid rgba(255,255,255,0.3);"><span>{icons['data']} {labels['data']}:</span><span id="med-data" style="font-weight:bold;color:#f1c40f;">{data_medicao}</span></div><div style="height:1px;background-color:rgba(255,255,255,0.2);margin:6px 0;"></div>'''
         except Exception:
             pass
 
+    # Campos
     parts = []
     for k in ["campanha", "reservatorio", "secao", "vazao"]:
         colname = cols.get(k)
@@ -286,13 +288,77 @@ def make_popup_html(row, cols):
                 try:
                     vazao_f = float(str(value).replace(',', '.'))
                     formatted_vazao = f"{vazao_f:,.2f} L/s".replace('.', '#').replace(',', '.').replace('#', ',')
-                    value = f'<span style="color:#d0e302;font-weight:700;font-size:1.2em;">{formatted_vazao}</span>'
+                    value = f'<span id="med-vazao" style="color:#FF5733;font-weight:700;font-size:1.2em;">{formatted_vazao}</span>'
                 except ValueError:
-                    value = f'<span style="color:#025721;font-weight:700;">{value} L/s</span>'
+                    value = f'<span id="med-vazao" style="color:#FF5733;font-weight:700;">{value} L/s</span>'
             parts.append(f'<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:0.95em;"><span style="font-weight:500;">{icon} {label}:</span><span style="font-weight:bold;text-align:right;">{value}</span></div>')
 
-    content_html = '\n'.join(parts)
+    # <<< LINHA CORRIGIDA >>>
+    content_html = '\\n'.join(parts)
 
+    # Seletor de data (escapando { e } no JS com {{ }})
+    selector_html = ''
+    try:
+        sec_col = cols.get('secao')
+        dat_col = cols.get('data')
+        vaz_col = cols.get('vazao')
+        if sec_col and dat_col and vaz_col:
+            sec_val = row.get(sec_col)
+            from inspect import currentframe
+            frame = currentframe()
+            fdf_local = None
+            while frame:
+                if 'fdf' in frame.f_locals:
+                    fdf_local = frame.f_locals['fdf']
+                    break
+                frame = frame.f_back
+            if fdf_local is not None:
+                tmp = fdf_local.loc[fdf_local[sec_col] == sec_val, [dat_col, vaz_col]].dropna()
+                tmp = tmp.sort_values(by=dat_col, ascending=True)
+                if len(tmp) > 1:
+                    opts = []
+                    for d, v in tmp.itertuples(index=False, name=None):
+                        try:
+                            dstr = pd.to_datetime(d, errors='coerce').strftime('%d/%m/%Y')
+                        except Exception:
+                            dstr = str(d)
+                        try:
+                            vf = float(str(v).replace(',', '.'))
+                            vfmt = f"{vf:,.2f} L/s".replace('.', '#').replace(',', '.').replace('#', ',')
+                        except Exception:
+                            vfmt = f"{v} L/s"
+                        sel = ' selected' if 'data_medicao' in locals() and dstr == data_medicao else ''
+                        opts.append(f"<option value='{dstr}|{vfmt}'{sel}>{dstr}</option>")
+                    sel_id = f"sel-{abs(hash(str(sec_val)))%10**8}"
+                    selector_html = f"""
+                    <div style='margin:6px 0 8px 0;'>
+                        <label style='font-size:0.85em;opacity:.95;margin-right:6px;'>Alterar data:</label>
+                        <select id='{sel_id}' style='padding:4px 8px;border-radius:6px;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.2);color:#fff;'>
+                            {"".join(opts)}
+                        </select>
+                    </div>
+                    <script>
+                        (function(){{
+                            var el = document.getElementById('{sel_id}');
+                            if(!el) return;
+                            el.addEventListener('change', function(){{
+                                var parts = this.value.split('|');
+                                var d = parts[0];
+                                var v = parts.slice(1).join('|');
+                                var dSpan = document.getElementById('med-data');
+                                var vSpan = document.getElementById('med-vazao');
+                                if(dSpan) dSpan.textContent = d;
+                                if(vSpan) vSpan.innerHTML = v;
+                            }});
+                        }})();
+                    </script>
+                    """
+    except Exception:
+        selector_html = ''
+
+    content_html = content_html + selector_html
+
+    # Miniaturas
     thumb_items = []
     rlab = row.get(cols.get("reservatorio", ""))
     slab = row.get(cols.get("secao", ""))
@@ -313,10 +379,11 @@ def make_popup_html(row, cols):
         cards = []
         for (t, b) in thumb_items:
             cards.append(f'<a href="{b}" target="_blank" title="Clique para ampliar"><img src="{t}" alt="{caption}" style="height:64px;width:auto;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.25);margin:4px;border:1px solid rgba(255,255,255,.35)"/></a>')
-        thumbs_html = f'<div style="margin-top:10px"><div style="font-size:0.9em;margin-bottom:6px;opacity:.95">📷 Miniaturas</div><div style="display:flex;flex-wrap:wrap;align-items:center;">{''.join(cards)}</div></div>'
+        thumbs_html = f'<div style="margin-top:10px"><div style="font-size:0.9em;margin-bottom:6px;opacity:.95">📷 Miniaturas</div><div style="display:flex;flex-wrap:wrap;align-items:center;">{"".join(cards)}</div></div>'
 
     popup_html = f"""<div style='font-family:Segoe UI, Tahoma, Geneva, Verdana, sans-serif;padding:15px;min-width:250px;max-width:350px;background:linear-gradient(135deg,#1abc9c 0%,#3498db 100%);border-radius:15px;box-shadow:0 10px 30px rgba(0,0,0,0.3);color:white;border:3px solid rgba(255,255,255,0.2);'><div style='background:rgba(255,255,255,0.15);padding:10px 15px;border-radius:10px;margin-bottom:15px;text-align:center;font-size:1.1em;font-weight:bold;letter-spacing:0.5px;text-shadow:1px 1px 2px rgba(0,0,0,0.2);'>Informações da Medição</div>{data_part}{content_html}{thumbs_html}<div style='margin-top:12px;padding:8px;background:rgba(255,255,255,0.1);border-radius:8px;text-align:center;font-size:0.8em;opacity:0.9;font-style:italic;'>Clique nas miniaturas para ampliar em nova aba.</div></div>"""
     return popup_html
+
 
 
 # =========================================================================================
