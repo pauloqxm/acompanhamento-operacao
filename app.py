@@ -577,21 +577,51 @@ def main():
                             items.append({"thumb": u, "src": u, "caption": caption, "iframe": False})
 
             if items:
-                # Substituição da função original pela nova com tela cheia
+                # Função corrigida - usando components.html para renderizar HTML
                 def render_lightgallery_mixed_with_fullscreen(items, height_px=520):
-                    """Renderiza galeria com botão de tela cheia"""
+                    """Renderiza galeria com botão de tela cheia usando components.html"""
                     
-                    gallery_html = """
+                    # Prepara os itens da galeria em HTML
+                    gallery_items_html = ""
+                    for i, item in enumerate(items):
+                        if item.get("iframe"):
+                            gallery_items_html += f"""
+                            <div class="gallery-item" onclick="openItemInFullscreen({i})">
+                                <iframe src="{item['src']}" 
+                                        width="280" 
+                                        height="180" 
+                                        style="border: none; border-radius: 8px;"
+                                        allowfullscreen>
+                                </iframe>
+                                <p class="gallery-caption">{item.get('caption', '')}</p>
+                            </div>
+                            """
+                        else:
+                            gallery_items_html += f"""
+                            <div class="gallery-item" onclick="openItemInFullscreen({i})">
+                                <img src="{item['thumb']}" 
+                                     style="width: 280px; height: 180px; object-fit: cover; border-radius: 8px;"
+                                     alt="{item.get('caption', '')}">
+                                <p class="gallery-caption">{item.get('caption', '')}</p>
+                            </div>
+                            "
+                    
+                    # HTML completo
+                    full_html = f"""
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
                     <style>
-                    .lightgallery-container {
+                    .lightgallery-container {{
                         position: relative;
                         margin: 10px 0;
                         border: 1px solid #e0e0e0;
                         border-radius: 10px;
                         padding: 15px;
                         background: #fafafa;
-                    }
-                    .fullscreen-btn {
+                        min-height: {height_px}px;
+                    }}
+                    .fullscreen-btn {{
                         position: absolute;
                         top: 15px;
                         right: 15px;
@@ -604,11 +634,11 @@ def main():
                         z-index: 1000;
                         font-size: 14px;
                         font-weight: bold;
-                    }
-                    .fullscreen-btn:hover {
+                    }}
+                    .fullscreen-btn:hover {{
                         background: #ff3333;
-                    }
-                    .gallery-fullscreen {
+                    }}
+                    .gallery-fullscreen {{
                         position: fixed;
                         top: 0;
                         left: 0;
@@ -619,11 +649,11 @@ def main():
                         display: none;
                         padding: 40px 20px 20px 20px;
                         overflow: auto;
-                    }
-                    .gallery-fullscreen.active {
+                    }}
+                    .gallery-fullscreen.active {{
                         display: block;
-                    }
-                    .close-fullscreen {
+                    }}
+                    .close-fullscreen {{
                         position: fixed;
                         top: 15px;
                         right: 20px;
@@ -636,83 +666,58 @@ def main():
                         z-index: 10000;
                         font-size: 24px;
                         font-weight: bold;
-                    }
-                    .close-fullscreen:hover {
+                    }}
+                    .close-fullscreen:hover {{
                         background: #ff2222;
-                    }
-                    .gallery-item-fullscreen {
+                    }}
+                    .gallery-item-fullscreen {{
                         max-width: 95%;
                         max-height: 85vh;
                         margin: 0 auto;
                         display: block;
                         border-radius: 8px;
                         box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-                    }
-                    .gallery-grid {
+                    }}
+                    .gallery-grid {{
                         display: flex;
                         flex-wrap: wrap;
                         gap: 15px;
                         justify-content: center;
                         margin-top: 40px;
-                    }
-                    .gallery-item {
+                    }}
+                    .gallery-item {{
                         cursor: pointer;
                         text-align: center;
                         transition: transform 0.2s;
-                    }
-                    .gallery-item:hover {
+                    }}
+                    .gallery-item:hover {{
                         transform: scale(1.05);
-                    }
-                    .gallery-item img, .gallery-item iframe {
+                    }}
+                    .gallery-item img, .gallery-item iframe {{
                         border-radius: 8px;
                         box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-                    }
-                    .gallery-caption {
+                    }}
+                    .gallery-caption {{
                         font-size: 12px;
                         margin: 5px 0;
                         color: #666;
                         max-width: 280px;
                         word-wrap: break-word;
-                    }
-                    .fullscreen-caption {
+                    }}
+                    .fullscreen-caption {{
                         color: white;
                         text-align: center;
                         margin-top: 15px;
                         font-size: 16px;
                         padding: 0 20px;
-                    }
+                    }}
                     </style>
-
+                    </head>
+                    <body>
                     <div class="lightgallery-container">
                         <button class="fullscreen-btn" onclick="openFullscreen()">⛶ Tela Cheia</button>
                         <div id="original-gallery" class="gallery-grid">
-                    """
-                    
-                    # Adiciona os itens da galeria
-                    for i, item in enumerate(items):
-                        if item.get("iframe"):
-                            gallery_html += f"""
-                            <div class="gallery-item" onclick="openItemInFullscreen({i})">
-                                <iframe src="{item['src']}" 
-                                        width="280" 
-                                        height="180" 
-                                        style="border: none; border-radius: 8px;"
-                                        allowfullscreen>
-                                </iframe>
-                                <p class="gallery-caption">{item.get('caption', '')}</p>
-                            </div>
-                            """
-                        else:
-                            gallery_html += f"""
-                            <div class="gallery-item" onclick="openItemInFullscreen({i})">
-                                <img src="{item['thumb']}" 
-                                     style="width: 280px; height: 180px; object-fit: cover; border-radius: 8px;"
-                                     alt="{item.get('caption', '')}">
-                                <p class="gallery-caption">{item.get('caption', '')}</p>
-                            </div>
-                            """
-                    
-                    gallery_html += """
+                            {gallery_items_html}
                         </div>
                         
                         <div id="fullscreen-gallery" class="gallery-fullscreen">
@@ -722,9 +727,9 @@ def main():
                     </div>
 
                     <script>
-                    const galleryItems = """ + str(items).replace("'", "&apos;") + """;
+                    const galleryItems = {str(items).replace("'", '"')};
                     
-                    function openFullscreen() {
+                    function openFullscreen() {{
                         document.getElementById('fullscreen-gallery').classList.add('active');
                         // Clona o conteúdo da galeria original
                         const originalContent = document.getElementById('original-gallery').innerHTML;
@@ -732,62 +737,66 @@ def main():
                         
                         // Aumenta o tamanho dos itens na tela cheia
                         const fullscreenItems = document.querySelectorAll('#fullscreen-content .gallery-item');
-                        fullscreenItems.forEach(item => {
-                            if (item.querySelector('img')) {
+                        fullscreenItems.forEach(item => {{
+                            if (item.querySelector('img')) {{
                                 item.querySelector('img').style.width = '400px';
                                 item.querySelector('img').style.height = '250px';
-                            }
-                            if (item.querySelector('iframe')) {
+                            }}
+                            if (item.querySelector('iframe')) {{
                                 item.querySelector('iframe').style.width = '400px';
                                 item.querySelector('iframe').style.height = '250px';
-                            }
-                        });
-                    }
+                            }}
+                        }});
+                    }}
                     
-                    function openItemInFullscreen(index) {
+                    function openItemInFullscreen(index) {{
                         const item = galleryItems[index];
                         document.getElementById('fullscreen-gallery').classList.add('active');
                         
                         let content = '';
-                        if (item.iframe) {
+                        if (item.iframe) {{
                             content = `<div style="display: flex; justify-content: center; align-items: center; height: 100vh;">
-                                          <iframe src="${item.src}" 
+                                          <iframe src="{item['src']}" 
                                                   style="width: 90vw; height: 90vh; border: none; border-radius: 10px;"
                                                   allowfullscreen></iframe>
                                        </div>`;
-                        } else {
+                        }} else {{
                             content = `<div style="display: flex; justify-content: center; align-items: center; height: 100vh;">
-                                          <img src="${item.src}" 
+                                          <img src="{item['src']}" 
                                                class="gallery-item-fullscreen"
-                                               alt="${item.caption}">
+                                               alt="{item.get('caption', '')}">
                                        </div>`;
-                        }
+                        }}
                         
-                        content += `<p class="fullscreen-caption">${item.caption}</p>`;
+                        content += `<p class="fullscreen-caption">{item.get('caption', '')}</p>`;
                         document.getElementById('fullscreen-content').innerHTML = content;
-                    }
+                    }}
                     
-                    function closeFullscreen() {
+                    function closeFullscreen() {{
                         document.getElementById('fullscreen-gallery').classList.remove('active');
-                    }
+                    }}
                     
                     // Fechar com ESC
-                    document.addEventListener('keydown', function(e) {
-                        if (e.key === 'Escape') {
+                    document.addEventListener('keydown', function(e) {{
+                        if (e.key === 'Escape') {{
                             closeFullscreen();
-                        }
-                    });
+                        }}
+                    }});
                     
                     // Fechar ao clicar fora do conteúdo
-                    document.getElementById('fullscreen-gallery').addEventListener('click', function(e) {
-                        if (e.target === this) {
+                    document.getElementById('fullscreen-gallery').addEventListener('click', function(e) {{
+                        if (e.target === this) {{
                             closeFullscreen();
-                        }
-                    });
+                        }}
+                    }});
                     </script>
+                    </body>
+                    </html>
                     """
                     
-                    st.markdown(gallery_html, unsafe_allow_html=True)
+                    # Usa components.html em vez de st.markdown
+                    import streamlit.components.v1 as components
+                    components.html(full_html, height=height_px + 100, scrolling=False)
 
                 # Chama a nova função com tela cheia
                 render_lightgallery_mixed_with_fullscreen(items, height_px=520)
