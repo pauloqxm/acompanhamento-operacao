@@ -517,7 +517,7 @@ def main():
             st.dataframe(
                 display_df[table_cols].rename(columns=renamed),
                 use_container_width=True,
-                height=540
+                height=555
             )
         else:
             st.warning("⚠️ Não encontrei as colunas necessárias para a tabela solicitada.")
