@@ -517,7 +517,7 @@ def main():
             st.dataframe(
                 display_df[table_cols].rename(columns=renamed),
                 use_container_width=True,
-                height=420
+                height=520
             )
         else:
             st.warning("⚠️ Não encontrei as colunas necessárias para a tabela solicitada.")
@@ -577,7 +577,7 @@ def main():
                             items.append({"thumb": u, "src": u, "caption": caption, "iframe": False})
 
             if items:
-                render_lightgallery_mixed(items, height_px=620)
+                render_lightgallery_mixed(items, height_px=520)
             else:
                 st.info("📭 Sem mídias para exibir nessa coluna. Verifique se os links estão públicos no Drive.")
 
