@@ -355,26 +355,17 @@ def main():
     if "cache_bust" not in st.session_state:
         st.session_state["cache_bust"] = 0
 
-    # Header + botão de atualização lado a lado
-    top_l, top_r = st.columns([1, 0.25])
-    with top_l:
-        st.markdown("""
-            <div style="
-                background: linear-gradient(135deg, #0f4c75 0%, #3282b8 100%);
-                padding: 2rem;border-radius: 0 0 20px 20px;margin: -1rem -1rem 2rem -1rem;
-                color: white;text-align: center;box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-            ">
-                <h1 style="margin:0;font-size: 2.5rem;font-weight:700;">🌊Acompanhamento da Operação 2025.2</h1>
-                <p style="margin:0.5rem 0 0 0;font-size:1.2rem;opacity: 0.9;">Perenização de Rios • Sistema de Análise de Dados</p>
-            </div>
-        """, unsafe_allow_html=True)
-    with top_r:
-        if st.button("🔄 Atualizar dados do Sheets", use_container_width=True, type="primary"):
-            # Limpa cache de dados
-            load_from_gsheet_csv.clear()
-            # Incrementa o bust para gerar nova chave de cache e furar caches externos
-            st.session_state["cache_bust"] += 1
-            st.rerun()
+    # Header (largura total)
+    st.markdown("""
+        <div style="
+            background: linear-gradient(135deg, #0f4c75 0%, #3282b8 100%);
+            padding: 2rem;border-radius: 0 0 20px 20px;margin: -1rem -1rem 2rem -1rem;
+            color: white;text-align: center;box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        ">
+            <h1 style="margin:0;font-size: 2.5rem;font-weight:700;">🌊Acompanhamento da Operação 2025.2</h1>
+            <p style="margin:0.5rem 0 0 0;font-size:1.2rem;opacity: 0.9;">Perenização de Rios • Sistema de Análise de Dados</p>
+        </div>
+    """, unsafe_allow_html=True)
 
     st.caption(f"🕐 Última atualização dos dados: {datetime.now(TZ).strftime('%d/%m/%Y %H:%M:%S')} — Fuso America/Fortaleza")
 
@@ -456,15 +447,25 @@ def main():
         if flt is not None:
             fdf = fdf.loc[flt]
 
-    st.markdown(f"""
-        <div style="
-            background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
-            color: white;padding: 0.5rem 1rem;border-radius: 20px;display: inline-block;
-            margin: 0.5rem 0;font-weight: bold;box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        ">
-            📈 Registros após filtros: <strong>{len(fdf)}</strong>
-        </div>
-    """, unsafe_allow_html=True)
+    # =========================
+    # MÉTRICA + BOTÃO (lado a lado)
+    # =========================
+    metric_l, metric_r = st.columns([1, 0.25])
+    with metric_l:
+        st.markdown(f"""
+            <div style="
+                background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+                color: white;padding: 0.5rem 1rem;border-radius: 20px;display: inline-block;
+                margin: 0.5rem 0;font-weight: bold;box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            ">
+                📈 Registros após filtros: <strong>{len(fdf)}</strong>
+            </div>
+        """, unsafe_allow_html=True)
+    with metric_r:
+        if st.button("🔄 Atualizar dados do Sheets", use_container_width=True, type="primary"):
+            load_from_gsheet_csv.clear()
+            st.session_state["cache_bust"] += 1
+            st.rerun()
 
     # =========================
     # TABELA + MÍDIAS
@@ -508,11 +509,11 @@ def main():
         if table_cols:
             renamed = {
                 "Data formatada": "Data da Medição",
-                cols.get("campanha",""): "Campanha",
-                cols.get("reservatorio",""): "Reservatório/Sistema",
-                cols.get("secao",""): "Seção",
-                cols.get("vazao",""): "Vazão (L/s)",
-                cols.get("obs",""): "Observações",
+                cols.get("campanha"," "): "Campanha",
+                cols.get("reservatorio"," "): "Reservatório/Sistema",
+                cols.get("secao"," "): "Seção",
+                cols.get("vazao"," "): "Vazão (L/s)",
+                cols.get("obs"," "): "Observações",
             }
             st.dataframe(
                 display_df[table_cols].rename(columns=renamed),
