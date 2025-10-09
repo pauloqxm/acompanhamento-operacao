@@ -364,7 +364,7 @@ def main():
                 padding: 2rem;border-radius: 0 0 20px 20px;margin: -1rem -1rem 2rem -1rem;
                 color: white;text-align: center;box-shadow: 0 4px 20px rgba(0,0,0,0.15);
             ">
-                <h1 style="margin:0;font-size: 2.5rem;font-weight:700;">🌊 Monitoramento de Vazões</h1>
+                <h1 style="margin:0;font-size: 2.5rem;font-weight:700;">🌊Acompanhamento da Operação 2025.2</h1>
                 <p style="margin:0.5rem 0 0 0;font-size:1.2rem;opacity: 0.9;">Perenização de Rios • Sistema de Análise de Dados</p>
             </div>
         """, unsafe_allow_html=True)
