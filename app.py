@@ -310,7 +310,9 @@ def make_popup_html(row, cols):
                     break
                 frame = frame.f_back
             if fdf_local is not None:
-                tmp = fdf_local.loc[fdf_local[sec_col] == sec_val, [dat_col, vaz_col]].dropna()
+                tmp = fdf_local.loc[fdf_local[sec_col] == sec_val, [dat_col, vaz_col]].copy()
+                # só garante que a DATA exista; não exclui linhas sem vazão
+                tmp = tmp.dropna(subset=[dat_col])
                 tmp = tmp.sort_values(by=dat_col, ascending=True)
                 if len(tmp) > 1:
                     opts = []
@@ -323,7 +325,7 @@ def make_popup_html(row, cols):
                             vf = float(str(v).replace(',', '.'))
                             vfmt = f"{vf:,.2f} L/s".replace('.', '#').replace(',', '.').replace('#', ',')
                         except Exception:
-                            vfmt = f"{v} L/s"
+                            vfmt = "-" if (v is None or (isinstance(v, float) and (pd.isna(v)))) else f"{v} L/s"
                         sel = ' selected' if 'data_medicao' in locals() and dstr == data_medicao else ''
                         opts.append(f"<option value='{dstr}|{vfmt}'{sel}>{dstr}</option>")
                     sel_id = f"sel-{abs(hash(str(sec_val)))%10**8}"
@@ -379,6 +381,7 @@ def make_popup_html(row, cols):
 
     popup_html = f"""<div style='font-family:Segoe UI, Tahoma, Geneva, Verdana, sans-serif;padding:15px;min-width:250px;max-width:350px;background:linear-gradient(135deg,#1abc9c 0%,#3498db 100%);border-radius:15px;box-shadow:0 10px 30px rgba(0,0,0,0.3);color:white;border:3px solid rgba(255,255,255,0.2);'><div style='background:rgba(255,255,255,0.15);padding:10px 15px;border-radius:10px;margin-bottom:15px;text-align:center;font-size:1.1em;font-weight:bold;letter-spacing:0.5px;text-shadow:1px 1px 2px rgba(0,0,0,0.2);'>Informações da Medição</div>{data_part}{content_html}{thumbs_html}<div style='margin-top:12px;padding:8px;background:rgba(255,255,255,0.1);border-radius:8px;text-align:center;font-size:0.8em;opacity:0.9;font-style:italic;'>Clique nas miniaturas para ampliar em nova aba.</div></div>"""
     return popup_html
+
 
 # =========================================================================================
 
