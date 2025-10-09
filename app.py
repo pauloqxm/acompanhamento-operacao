@@ -266,8 +266,10 @@ def make_popup_html(row, cols):
         is_video = url.lower().endswith((".mp4", ".mov", ".webm"))
         return (url, url, is_video)
 
+    # === Cabeçalho: data ===
     date_col = cols.get("data")
     data_part = ''
+    data_medicao = None
     if date_col and date_col in row and pd.notna(row[date_col]):
         try:
             data_medicao = row[date_col].strftime('%d/%m/%Y')
@@ -275,6 +277,7 @@ def make_popup_html(row, cols):
         except Exception:
             pass
 
+    # === Campos (inclui vazão com id para atualizar) ===
     parts = []
     for k in ["campanha", "reservatorio", "secao", "vazao"]:
         colname = cols.get(k)
@@ -291,14 +294,18 @@ def make_popup_html(row, cols):
                     value = f'<span id="med-vazao" style="color:#FF5733;font-weight:700;">{value} L/s</span>'
             parts.append(f'<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:0.95em;"><span style="font-weight:500;">{icon} {label}:</span><span style="font-weight:bold;text-align:right;">{value}</span></div>')
 
-    content_html = "".join(parts)
+    content_html = '\\n'.join(parts)
 
-    # seletor de data
+    # === Monta opções de datas e mapa de mídias/vazões por data (mesma Seção) ===
     selector_html = ''
+    media_by_date = {}      # { "dd/mm/aaaa": "<html das miniaturas>" }
+    vazao_by_date = {}      # { "dd/mm/aaaa": "12,34 L/s" }
     try:
         sec_col = cols.get('secao')
         dat_col = cols.get('data')
         vaz_col = cols.get('vazao')
+        fotos_cols = [c for c in [cols.get("foto1"), cols.get("foto2"), cols.get("foto3")] if c]
+
         if sec_col and dat_col and vaz_col:
             sec_val = row.get(sec_col)
             from inspect import currentframe
@@ -309,78 +316,156 @@ def make_popup_html(row, cols):
                     fdf_local = frame.f_locals['fdf']
                     break
                 frame = frame.f_back
+
             if fdf_local is not None:
-                tmp = fdf_local.loc[fdf_local[sec_col] == sec_val, [dat_col, vaz_col]].copy()
-                # só garante que a DATA exista; não exclui linhas sem vazão
+                # Subconjunto da mesma seção, ordenado por data
+                tmp = fdf_local.loc[fdf_local[sec_col] == sec_val].copy()
                 tmp = tmp.dropna(subset=[dat_col])
                 tmp = tmp.sort_values(by=dat_col, ascending=True)
-                if len(tmp) > 1:
+
+                # Para cada data: monta cards de miniaturas e vazão formatada
+                rlab = row.get(cols.get("reservatorio", ""))
+                slab = row.get(cols.get("secao", ""))
+                caption = " • ".join([x for x in [str(rlab) if rlab else None, str(slab) if slab else None] if x])
+
+                for _, r in tmp.iterrows():
+                    try:
+                        dkey = pd.to_datetime(r[dat_col], errors='coerce').strftime('%d/%m/%Y')
+                    except Exception:
+                        dkey = str(r.get(dat_col, ''))
+
+                    # Vazão por data
+                    v = r.get(vaz_col)
+                    try:
+                        vf = float(str(v).replace(',', '.'))
+                        vfmt = f"{vf:,.2f} L/s".replace('.', '#').replace(',', '.').replace('#', ',')
+                    except Exception:
+                        vfmt = f"{v} L/s" if v not in (None, "", float("nan")) else "-"
+
+                    vazao_by_date[dkey] = vfmt
+
+                    # Miniaturas por data
+                    items = []
+                    for fc in fotos_cols:
+                        cell = r.get(fc)
+                        if isinstance(cell, str):
+                            for u in split_urls(cell):
+                                t, b, is_video = build_img_thumb_big(u)
+                                if not is_video:
+                                    items.append((t, b))
+
+                    if items:
+                        cards = [f'<a href="{b}" target="_blank" title="Clique para ampliar"><img src="{t}" alt="{caption}" style="height:64px;width:auto;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.25);margin:4px;border:1px solid rgba(255,255,255,.35)"/></a>' for (t,b) in items]
+                        media_by_date[dkey] = f'{"".join(cards)}'
+                    else:
+                        media_by_date[dkey] = '<span style="opacity:.9">Sem imagens nesta data.</span>'
+
+                # Se houver mais de uma data, exibe select + injeta dicionários no JS
+                if len(media_by_date) > 1:
+                    # opções (seleciona a atual, se existir)
                     opts = []
-                    for d, v in tmp.itertuples(index=False, name=None):
-                        try:
-                            dstr = pd.to_datetime(d, errors='coerce').strftime('%d/%m/%Y')
-                        except Exception:
-                            dstr = str(d)
-                        try:
-                            vf = float(str(v).replace(',', '.'))
-                            vfmt = f"{vf:,.2f} L/s".replace('.', '#').replace(',', '.').replace('#', ',')
-                        except Exception:
-                            vfmt = "-" if (v is None or (isinstance(v, float) and (pd.isna(v)))) else f"{v} L/s"
-                        sel = ' selected' if 'data_medicao' in locals() and dstr == data_medicao else ''
-                        opts.append(f"<option value='{dstr}|{vfmt}'{sel}>{dstr}</option>")
+                    for dkey in sorted(media_by_date.keys(), key=lambda s: datetime.strptime(s, "%d/%m/%Y")):
+                        sel = ' selected' if (data_medicao and dkey == data_medicao) else ''
+                        opts.append(f"<option value='{dkey}'{sel}>{dkey}</option>")
+
                     sel_id = f"sel-{abs(hash(str(sec_val)))%10**8}"
+
+                    # Contêiner das miniaturas com id para atualizar via JS
+                    # (preenche inicialmente com a data atual ou a primeira)
+                    current_date_key = data_medicao if data_medicao in media_by_date else (sorted(media_by_date.keys(), key=lambda s: datetime.strptime(s, "%d/%m/%Y"))[0])
+                    thumbs_initial_html = media_by_date.get(current_date_key, '<span style="opacity:.9">Sem imagens nesta data.</span>')
+
+                    # Bloco select + script (dobrar chaves {{ }})
                     selector_html = f"""
                     <div style='margin:6px 0 8px 0;'>
-                        <label style='font-size:0.85em;opacity:.95;margin-right:6px;color:#fff;'>Alterar data:</label>
-                        <select id='{sel_id}' style='padding:6px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.35);background:rgba(0,0,0,0.3);color:#fff;font-size:0.9em;'>
-                            {''.join(opts)}
+                        <label style='font-size:0.85em;opacity:.95;margin-right:6px;'>Alterar data:</label>
+                        <select id='{sel_id}' style='padding:4px 8px;border-radius:6px;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.2);color:#fff;'>
+                            {"".join(opts)}
                         </select>
                     </div>
                     <script>
                         (function(){{
                             var el = document.getElementById('{sel_id}');
                             if(!el) return;
+
+                            // Dicionários serializados do Python:
+                            var mediaByDate = {json.dumps(media_by_date, ensure_ascii=False)};
+                            var vazaoByDate = {json.dumps(vazao_by_date, ensure_ascii=False)};
+
                             el.addEventListener('change', function(){{
-                                var parts = this.value.split('|');
-                                var d = parts[0];
-                                var v = parts.slice(1).join('|');
+                                var d = this.value;
+
+                                // Atualiza data e vazão
                                 var dSpan = document.getElementById('med-data');
                                 var vSpan = document.getElementById('med-vazao');
                                 if(dSpan) dSpan.textContent = d;
-                                if(vSpan) vSpan.innerHTML = v;
+                                if(vSpan && vazaoByDate[d]) vSpan.innerHTML = vazaoByDate[d];
+
+                                // Atualiza miniaturas
+                                var thumbs = document.getElementById('med-thumbs');
+                                if(thumbs && mediaByDate[d] !== undefined) {{
+                                    thumbs.innerHTML = mediaByDate[d];
+                                }}
                             }});
                         }})();
                     </script>
                     """
+
     except Exception:
         selector_html = ''
 
     content_html = content_html + selector_html
 
-    thumb_items = []
+    # === Miniaturas (container com id; conteúdo inicial para a data corrente) ===
+    # Monta miniaturas para a linha atual (fallback se não houver dict calculado)
     rlab = row.get(cols.get("reservatorio", ""))
     slab = row.get(cols.get("secao", ""))
     caption = " • ".join([x for x in [str(rlab) if rlab else None, str(slab) if slab else None] if x])
 
+    items_current = []
     for k in ["foto1", "foto2", "foto3"]:
         cname = cols.get(k)
         if not cname or cname not in row:
             continue
-        for u in split_urls(row.get(cname)):
+        cell = row.get(cname)
+        if not isinstance(cell, str):
+            continue
+        for u in split_urls(cell):
             t, b, is_video = build_img_thumb_big(u)
-            if is_video:
-                continue
-            thumb_items.append((t, b))
+            if not is_video:
+                items_current.append((t, b))
 
-    thumbs_html = ''
-    if thumb_items:
-        cards = []
-        for (t, b) in thumb_items:
-            cards.append(f'<a href="{b}" target="_blank" title="Clique para ampliar"><img src="{t}" alt="{caption}" style="height:64px;width:auto;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.25);margin:4px;border:1px solid rgba(255,255,255,.35)"/></a>')
-        thumbs_html = f'<div style="margin-top:10px"><div style="font-size:0.9em;margin-bottom:6px;opacity:.95">📷 Miniaturas</div><div style="display:flex;flex-wrap:wrap;align-items:center;">{''.join(cards)}</div></div>'
+    if items_current:
+        cards = [f'<a href="{b}" target="_blank" title="Clique para ampliar"><img src="{t}" alt="{caption}" style="height:64px;width:auto;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.25);margin:4px;border:1px solid rgba(255,255,255,.35)"/></a>' for (t,b) in items_current]
+        thumbs_initial = f'{"".join(cards)}'
+    else:
+        # Se não houver, e media_by_date foi montado, tenta usar a atual
+        if data_medicao and data_medicao in media_by_date:
+            thumbs_initial = media_by_date[data_medicao]
+        else:
+            thumbs_initial = '<span style="opacity:.9">Sem imagens nesta data.</span>'
 
-    popup_html = f"""<div style='font-family:Segoe UI, Tahoma, Geneva, Verdana, sans-serif;padding:15px;min-width:250px;max-width:350px;background:linear-gradient(135deg,#1abc9c 0%,#3498db 100%);border-radius:15px;box-shadow:0 10px 30px rgba(0,0,0,0.3);color:white;border:3px solid rgba(255,255,255,0.2);'><div style='background:rgba(255,255,255,0.15);padding:10px 15px;border-radius:10px;margin-bottom:15px;text-align:center;font-size:1.1em;font-weight:bold;letter-spacing:0.5px;text-shadow:1px 1px 2px rgba(0,0,0,0.2);'>Informações da Medição</div>{data_part}{content_html}{thumbs_html}<div style='margin-top:12px;padding:8px;background:rgba(255,255,255,0.1);border-radius:8px;text-align:center;font-size:0.8em;opacity:0.9;font-style:italic;'>Clique nas miniaturas para ampliar em nova aba.</div></div>"""
+    thumbs_html = f'''
+        <div style="margin-top:10px">
+            <div style="font-size:0.9em;margin-bottom:6px;opacity:.95">📷 Miniaturas</div>
+            <div id="med-thumbs" style="display:flex;flex-wrap:wrap;align-items:center;">{thumbs_initial}</div>
+        </div>
+    '''
+
+    # === Popup final ===
+    popup_html = f"""<div style='font-family:Segoe UI, Tahoma, Geneva, Verdana, sans-serif;padding:15px;min-width:250px;max-width:350px;background:linear-gradient(135deg,#1abc9c 0%,#3498db 100%);border-radius:15px;box-shadow:0 10px 30px rgba(0,0,0,0.3);color:white;border:3px solid rgba(255,255,255,0.2);'>
+        <div style='background:rgba(255,255,255,0.15);padding:10px 15px;border-radius:10px;margin-bottom:15px;text-align:center;font-size:1.1em;font-weight:bold;letter-spacing:0.5px;text-shadow:1px 1px 2px rgba(0,0,0,0.2);'>
+            Informações da Medição
+        </div>
+        {data_part}
+        {content_html}
+        {thumbs_html}
+        <div style='margin-top:12px;padding:8px;background:rgba(255,255,255,0.1);border-radius:8px;text-align:center;font-size:0.8em;opacity:0.9;font-style:italic;'>
+            Clique nas miniaturas para ampliar em nova aba.
+        </div>
+    </div>"""
     return popup_html
+
 
 
 # =========================================================================================
