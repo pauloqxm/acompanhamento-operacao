@@ -21,7 +21,7 @@ from branca.element import IFrame  # popups HTML
 # Config geral
 # =========================
 st.set_page_config(
-    page_title="Perenização de Rios • Vazões",
+    page_title="Acompanhamento da Operação 2025.2",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
