@@ -580,8 +580,10 @@ def main():
                 # Função corrigida - usando components.html para renderizar HTML
                 def render_lightgallery_mixed_with_fullscreen(items, height_px=520):
                     """Renderiza galeria com botão de tela cheia usando components.html"""
-                    
-                    # Prepara os itens da galeria em HTML
+                    import json
+                    import streamlit.components.v1 as components
+
+                    # Prepara os itens da galeria em HTML (miniaturas)
                     gallery_items_html = ""
                     for i, item in enumerate(items):
                         if item.get("iframe"):
@@ -600,17 +602,21 @@ def main():
                             gallery_items_html += f"""
                             <div class="gallery-item" onclick="openItemInFullscreen({i})">
                                 <img src="{item['thumb']}" 
-                                     style="width: 280px; height: 180px; object-fit: cover; border-radius: 8px;"
-                                     alt="{item.get('caption', '')}">
+                                    style="width: 280px; height: 180px; object-fit: cover; border-radius: 8px;"
+                                    alt="{item.get('caption', '')}">
                                 <p class="gallery-caption">{item.get('caption', '')}</p>
                             </div>
-                            "
-                    
+                            """  # <-- Removida a aspa solta que causava erro
+
+                    # Serializa os itens de forma segura para JS
+                    items_json = json.dumps(items, ensure_ascii=False)
+
                     # HTML completo
                     full_html = f"""
                     <!DOCTYPE html>
                     <html>
                     <head>
+                    <meta charset="utf-8" />
                     <style>
                     .lightgallery-container {{
                         position: relative;
@@ -635,9 +641,7 @@ def main():
                         font-size: 14px;
                         font-weight: bold;
                     }}
-                    .fullscreen-btn:hover {{
-                        background: #ff3333;
-                    }}
+                    .fullscreen-btn:hover {{ background: #ff3333; }}
                     .gallery-fullscreen {{
                         position: fixed;
                         top: 0;
@@ -650,9 +654,7 @@ def main():
                         padding: 40px 20px 20px 20px;
                         overflow: auto;
                     }}
-                    .gallery-fullscreen.active {{
-                        display: block;
-                    }}
+                    .gallery-fullscreen.active {{ display: block; }}
                     .close-fullscreen {{
                         position: fixed;
                         top: 15px;
@@ -667,9 +669,7 @@ def main():
                         font-size: 24px;
                         font-weight: bold;
                     }}
-                    .close-fullscreen:hover {{
-                        background: #ff2222;
-                    }}
+                    .close-fullscreen:hover {{ background: #ff2222; }}
                     .gallery-item-fullscreen {{
                         max-width: 95%;
                         max-height: 85vh;
@@ -690,9 +690,7 @@ def main():
                         text-align: center;
                         transition: transform 0.2s;
                     }}
-                    .gallery-item:hover {{
-                        transform: scale(1.05);
-                    }}
+                    .gallery-item:hover {{ transform: scale(1.05); }}
                     .gallery-item img, .gallery-item iframe {{
                         border-radius: 8px;
                         box-shadow: 0 2px 8px rgba(0,0,0,0.2);
@@ -727,81 +725,81 @@ def main():
                     </div>
 
                     <script>
-                    const galleryItems = {str(items).replace("'", '"')};
-                    
+                    const galleryItems = {items_json};
+
                     function openFullscreen() {{
                         document.getElementById('fullscreen-gallery').classList.add('active');
                         // Clona o conteúdo da galeria original
                         const originalContent = document.getElementById('original-gallery').innerHTML;
-                        document.getElementById('fullscreen-content').innerHTML = '<div class="gallery-grid" style="margin-top: 20px;">' + originalContent + '</div>';
-                        
+                        document.getElementById('fullscreen-content').innerHTML =
+                            '<div class="gallery-grid" style="margin-top: 20px;">' + originalContent + '</div>';
+
                         // Aumenta o tamanho dos itens na tela cheia
                         const fullscreenItems = document.querySelectorAll('#fullscreen-content .gallery-item');
                         fullscreenItems.forEach(item => {{
-                            if (item.querySelector('img')) {{
-                                item.querySelector('img').style.width = '400px';
-                                item.querySelector('img').style.height = '250px';
+                            const img = item.querySelector('img');
+                            const ifr = item.querySelector('iframe');
+                            if (img) {{
+                                img.style.width = '400px';
+                                img.style.height = '250px';
                             }}
-                            if (item.querySelector('iframe')) {{
-                                item.querySelector('iframe').style.width = '400px';
-                                item.querySelector('iframe').style.height = '250px';
+                            if (ifr) {{
+                                ifr.style.width = '400px';
+                                ifr.style.height = '250px';
                             }}
                         }});
                     }}
-                    
+
                     function openItemInFullscreen(index) {{
                         const item = galleryItems[index];
                         document.getElementById('fullscreen-gallery').classList.add('active');
-                        
+
                         let content = '';
                         if (item.iframe) {{
-                            content = `<div style="display: flex; justify-content: center; align-items: center; height: 100vh;">
-                                          <iframe src="{item['src']}" 
-                                                  style="width: 90vw; height: 90vh; border: none; border-radius: 10px;"
-                                                  allowfullscreen></iframe>
-                                       </div>`;
+                            content = `
+                              <div style="display: flex; justify-content: center; align-items: center; height: 100vh;">
+                                <iframe src="${{item.src}}"
+                                        style="width: 90vw; height: 90vh; border: none; border-radius: 10px;"
+                                        allowfullscreen></iframe>
+                              </div>`;
                         }} else {{
-                            content = `<div style="display: flex; justify-content: center; align-items: center; height: 100vh;">
-                                          <img src="{item['src']}" 
-                                               class="gallery-item-fullscreen"
-                                               alt="{item.get('caption', '')}">
-                                       </div>`;
+                            content = `
+                              <div style="display: flex; justify-content: center; align-items: center; height: 100vh;">
+                                <img src="${{item.src}}"
+                                    class="gallery-item-fullscreen"
+                                    alt="${{item.caption || ''}}">
+                              </div>`;
                         }}
-                        
-                        content += `<p class="fullscreen-caption">{item.get('caption', '')}</p>`;
+
+                        content += `<p class="fullscreen-caption">${{item.caption || ''}}</p>`;
                         document.getElementById('fullscreen-content').innerHTML = content;
                     }}
-                    
+
                     function closeFullscreen() {{
                         document.getElementById('fullscreen-gallery').classList.remove('active');
                     }}
-                    
+
                     // Fechar com ESC
                     document.addEventListener('keydown', function(e) {{
-                        if (e.key === 'Escape') {{
-                            closeFullscreen();
-                        }}
+                        if (e.key === 'Escape') closeFullscreen();
                     }});
-                    
+
                     // Fechar ao clicar fora do conteúdo
                     document.getElementById('fullscreen-gallery').addEventListener('click', function(e) {{
-                        if (e.target === this) {{
-                            closeFullscreen();
-                        }}
+                        if (e.target === this) closeFullscreen();
                     }});
                     </script>
                     </body>
                     </html>
                     """
-                    
-                    # Usa components.html em vez de st.markdown
-                    import streamlit.components.v1 as components
-                    components.html(full_html, height=height_px + 100, scrolling=False)
+
+                    components.html(full_html, height=height_px + 120, scrolling=False)
 
                 # Chama a nova função com tela cheia
                 render_lightgallery_mixed_with_fullscreen(items, height_px=520)
             else:
                 st.info("📭 Sem mídias para exibir nessa coluna. Verifique se os links estão públicos no Drive.")
+
 
     # =========================
     # MAPA — Folium (wide)
