@@ -38,6 +38,33 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# --- Estilização extra: botão primário como pílula verde, igual ao badge ---
+st.markdown("""
+    <style>
+        /* Botão primário com gradiente verde (pílula) */
+        .stButton > button[kind="primary"],
+        div[data-testid="baseButton-primary"] > button {
+            background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%) !important;
+            color: #fff !important;
+            border: none !important;
+            border-radius: 999px !important;
+            padding: 0.6rem 1rem !important;
+            font-weight: 700 !important;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.12) !important;
+            transition: transform .05s ease-in-out, box-shadow .2s ease-in-out !important;
+        }
+        .stButton > button[kind="primary"]:hover,
+        div[data-testid="baseButton-primary"] > button:hover {
+            filter: brightness(1.03);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.18) !important;
+        }
+        .stButton > button[kind="primary"]:active,
+        div[data-testid="baseButton-primary"] > button:active {
+            transform: scale(0.99);
+        }
+    </style>
+""", unsafe_allow_html=True)
+
 TZ = ZoneInfo("America/Fortaleza")
 
 # =========================
