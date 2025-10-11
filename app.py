@@ -237,6 +237,10 @@ def render_lightgallery_mixed(items: list, height_px=440):
     """
     components.html(html, height=height_px, scrolling=True)
 
+#=====================================================================
+# POPUP estilizado
+#=====================================================================
+
 def make_popup_html(row, cols):
     safe = lambda x: "-" if (x is None or (isinstance(x,float) and math.isnan(x))) else str(x)
     labels = {
@@ -286,9 +290,9 @@ def make_popup_html(row, cols):
                 try:
                     vazao_f = float(str(value).replace(',', '.'))
                     formatted_vazao = f"{vazao_f:,.2f} L/s".replace('.', '#').replace(',', '.').replace('#', ',')
-                    value = f'<span id="med-vazao" style="color:#FF5733;font-weight:700;font-size:1.2em;">{formatted_vazao}</span>'
+                    value = f'<span id="med-vazao" style="color:#ccf502;font-weight:700;font-size:1.2em;">{formatted_vazao}</span>'
                 except ValueError:
-                    value = f'<span id="med-vazao" style="color:#FF5733;font-weight:700;">{value} L/s</span>'
+                    value = f'<span id="med-vazao" style="color:#ccf502;font-weight:700;">{value} L/s</span>'
             parts.append(f'<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:0.95em;"><span style="font-weight:500;">{icon} {label}:</span><span style="font-weight:bold;text-align:right;">{value}</span></div>')
 
     content_html = ''.join(parts)  # CORREÇÃO: Removido \n
