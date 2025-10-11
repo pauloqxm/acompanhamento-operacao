@@ -635,7 +635,7 @@ def main():
         st.markdown(f"""
             <div style="
                 background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
-                color: white;padding: 0.5rem 1rem;border-radius: 10px;display: inline-block;
+                color: white;padding: 0.5rem 1rem;border-radius: 20px;display: inline-block;
                 margin: 0.5rem 0;font-weight: bold;box-shadow: 0 2px 10px rgba(0,0,0,0.1);
             ">
                 📈 Registros após filtros: <strong>{len(fdf)}</strong>
