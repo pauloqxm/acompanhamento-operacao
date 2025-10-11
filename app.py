@@ -642,7 +642,7 @@ def main():
             </div>
         """, unsafe_allow_html=True)
     with metric_r:
-        if st.button("🔄 Atualizar dados do Sheets", use_container_width=True, type="primary"):
+        if st.button("🔄 Atualizar dados", use_container_width=True, type="primary"):
             load_from_gsheet_csv.clear()
             st.session_state["cache_bust"] += 1
             st.rerun()
