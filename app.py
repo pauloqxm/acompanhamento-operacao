@@ -237,9 +237,6 @@ def render_lightgallery_mixed(items: list, height_px=440):
     """
     components.html(html, height=height_px, scrolling=True)
 
-# =========================================================================================
-# POPUP estilizado
-# =========================================================================================
 def make_popup_html(row, cols):
     safe = lambda x: "-" if (x is None or (isinstance(x,float) and math.isnan(x))) else str(x)
     labels = {
@@ -294,7 +291,7 @@ def make_popup_html(row, cols):
                     value = f'<span id="med-vazao" style="color:#FF5733;font-weight:700;">{value} L/s</span>'
             parts.append(f'<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:0.95em;"><span style="font-weight:500;">{icon} {label}:</span><span style="font-weight:bold;text-align:right;">{value}</span></div>')
 
-    content_html = '\\n'.join(parts)
+    content_html = ''.join(parts)  # CORREÇÃO: Removido \n
 
     # === Monta opções de datas e mapa de mídias/vazões por data (mesma Seção) ===
     selector_html = ''
@@ -376,10 +373,11 @@ def make_popup_html(row, cols):
                     thumbs_initial_html = media_by_date.get(current_date_key, '<span style="opacity:.9">Sem imagens nesta data.</span>')
 
                     # Bloco select + script (dobrar chaves {{ }})
+                    # CORREÇÃO: Adicionado estilo para cor do texto no select
                     selector_html = f"""
                     <div style='margin:6px 0 8px 0;'>
                         <label style='font-size:0.85em;opacity:.95;margin-right:6px;'>Alterar data:</label>
-                        <select id='{sel_id}' style='padding:4px 8px;border-radius:6px;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.2);color:#fff;'>
+                        <select id='{sel_id}' style='padding:4px 8px;border-radius:6px;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.2);color:#000;font-weight:bold;'>
                             {"".join(opts)}
                         </select>
                     </div>
