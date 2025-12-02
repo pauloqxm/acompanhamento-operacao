@@ -766,6 +766,14 @@ def main():
 # =========================
 # MAPA — Folium (wide)
 # =========================
+    if 'sidebar_state' not in st.session_state:
+        st.session_state.sidebar_state = {
+            "enable_fullscreen": False,
+            "enable_measure": False
+        }
+    
+    sidebar_state = st.session_state.sidebar_state
+    
     st.markdown("---")
     st.subheader("🗺️ Mapa das Seções Monitoradas")
     
