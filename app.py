@@ -2,7 +2,6 @@ import os
 import re
 import json
 import math
-import uuid
 import pandas as pd
 import numpy as np
 import streamlit as st
@@ -13,7 +12,6 @@ import folium
 from folium import GeoJson, GeoJsonTooltip, LayerControl
 from folium.features import CustomIcon
 from streamlit_folium import st_folium
-from folium.plugins import Fullscreen, MeasureControl
 
 import altair as alt
 import streamlit.components.v1 as components
@@ -63,18 +61,6 @@ st.markdown("""
         .stButton > button[kind="primary"]:active,
         div[data-testid="baseButton-primary"] > button:active {
             transform: scale(0.99);
-        }
-        
-        /* Estilo para linha selecionada na tabela */
-        .stDataFrame [data-testid="stDataFrame"] tbody tr.selected {
-            background-color: #27ae60 !important;
-            color: white !important;
-            font-weight: bold !important;
-        }
-        
-        /* Estilo para checkbox no sidebar */
-        .stCheckbox > div {
-            padding: 8px 0;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -184,40 +170,16 @@ def drive_video_embed(file_id: str):
     """Preview em iframe para vídeo do Drive."""
     return f"https://drive.google.com/file/d/{file_id}/preview"
 
-def render_lightgallery_mixed(items: list, height_px=440, row_indices: list = None):
+def render_lightgallery_mixed(items: list, height_px=440):
     """
-    Versão simplificada que funciona sem problemas de chave
+    items = [{ 'thumb':..., 'src':..., 'caption':..., 'iframe': bool }]
     """
     if not items:
         st.info("Sem mídias para exibir.")
         return
 
-    # Primeiro, criar botões de seleção do Streamlit
-    if row_indices and any(idx >= 0 for idx in row_indices):
-        st.markdown("**📌 Selecione uma imagem:**")
-        
-        # Organizar em colunas
-        num_cols = 4
-        cols = st.columns(num_cols)
-        
-        for i, (item, row_idx) in enumerate(zip(items, row_indices)):
-            if row_idx >= 0:
-                with cols[i % num_cols]:
-                    # Mostrar miniatura e botão
-                    st.image(item["thumb"], use_column_width=True)
-                    
-                    # Botão para selecionar
-                    if st.button(f"Selecionar #{i+1}", 
-                                key=f"select_img_{i}",
-                                use_container_width=True):
-                        st.session_state.selected_row_index = row_idx
-                        st.rerun()
-        
-        st.markdown("---")
-    
-    # Agora renderizar a galeria LightGallery para visualização
     anchors = []
-    for i, it in enumerate(items):
+    for it in items:
         if it.get("iframe"):
             anchors.append(
                 f'''<a class="gallery-item" data-iframe="true" data-src="{it["src"]}" data-sub-html="{it.get("caption","")}">
@@ -237,20 +199,13 @@ def render_lightgallery_mixed(items: list, height_px=440, row_indices: list = No
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@2.7.2/css/lightgallery-bundle.min.css">
     <style>
       .lg-backdrop {{ background: rgba(0,0,0,0.9); }}
-      .gallery-container {{ 
-          display: flex; 
-          flex-wrap: wrap; 
-          gap: 12px; 
-          align-items: flex-start;
-          justify-content: center;
-      }}
+      .gallery-container {{ display:flex; flex-wrap: wrap; gap: 12px; align-items:flex-start; }}
       .gallery-item img {{ 
           height: 140px; 
           width: auto; 
           border-radius: 10px; 
           box-shadow: 0 4px 12px rgba(0,0,0,.2);
           transition: transform 0.3s ease, box-shadow 0.3s ease;
-          cursor: pointer;
       }}
       .gallery-item:hover img {{
           transform: scale(1.05);
@@ -280,9 +235,7 @@ def render_lightgallery_mixed(items: list, height_px=440, row_indices: list = No
       }});
     </script>
     """
-    
-    # Renderizar sem a chave que estava causando problemas
-    components.html(html, height=height_px, scrolling=False)
+    components.html(html, height=height_px, scrolling=True)
 
 #=====================================================================
 # POPUP estilizado
@@ -581,14 +534,6 @@ def main():
     # Estado para cache busting e botão de atualização
     if "cache_bust" not in st.session_state:
         st.session_state["cache_bust"] = 0
-    
-    # Estado para seleção de linha na tabela
-    if "selected_row_index" not in st.session_state:
-        st.session_state.selected_row_index = -1
-    
-    # Estado para navegação entre tabela e galeria
-    if "gallery_selection" not in st.session_state:
-        st.session_state.gallery_selection = None
 
     # Header (largura total)
     st.markdown("""
@@ -662,58 +607,6 @@ def main():
         secao_opts = options_for("secao")
         sec_sel = st.multiselect("**Seção**", secao_opts)
 
-    # =========================
-    # CONTROLES DO MAPA (sidebar)
-    # =========================
-    with st.sidebar:
-        st.markdown("---")
-        st.subheader("⚙️ Controles do Mapa")
-        
-        # Inicializar sidebar_state se não existir
-        if 'sidebar_state' not in st.session_state:
-            st.session_state.sidebar_state = {
-                "enable_fullscreen": False,
-                "enable_measure": False
-            }
-        
-        # Checkboxes para controle
-        enable_fullscreen = st.checkbox(
-            "🗔 Modo Tela Cheia",
-            value=st.session_state.sidebar_state["enable_fullscreen"],
-            key="fullscreen_checkbox"
-        )
-        
-        enable_measure = st.checkbox(
-            "📏 Ferramenta de Medição",
-            value=st.session_state.sidebar_state["enable_measure"],
-            key="measure_checkbox"
-        )
-        
-        # Atualizar estado
-        st.session_state.sidebar_state["enable_fullscreen"] = enable_fullscreen
-        st.session_state.sidebar_state["enable_measure"] = enable_measure
-        
-        # Botão para ativar tudo
-        if st.button("✅ Ativar Todos os Controles", use_container_width=True):
-            st.session_state.sidebar_state["enable_fullscreen"] = True
-            st.session_state.sidebar_state["enable_measure"] = True
-            st.rerun()
-        
-        # Espaçamento
-        st.markdown("<br><br>", unsafe_allow_html=True)
-        
-        # Informações
-        with st.expander("ℹ️ Sobre os Controles"):
-            st.info("""
-            **🗔 Modo Tela Cheia:**
-            Adiciona um botão no canto superior esquerdo do mapa para visualização em tela cheia.
-            
-            **📏 Ferramenta de Medição:**
-            Adiciona ferramentas para medir distâncias (metros/km) e áreas (hectares) diretamente no mapa.
-            
-            *Clique nos ícones correspondentes no mapa para usar as ferramentas.*
-            """)
-
     # Aplicar filtros
     fdf = df.copy()
     if cols.get("data") and (data_ini and data_fim):
@@ -761,36 +654,18 @@ def main():
     st.subheader("📋 Dados e Mídias")
     col_tab, col_media = st.columns([1, 1])
 
-# ---------- Tabela ----------
     # ---------- Tabela ----------
     with col_tab:
         st.markdown("**📊 Tabela de Registros**")
-        
-        # Botão para limpar seleção da tabela
-        if st.button("🗑️ Limpar Seleção da Tabela", type="secondary", key="clear_table"):
-            st.session_state.selected_row_index = -1
-            st.rerun()
-        
-        # Mostrar informação sobre a linha selecionada
-        if st.session_state.selected_row_index >= 0 and st.session_state.selected_row_index < len(fdf):
-            selected_row = fdf.iloc[st.session_state.selected_row_index]
-            secao_val = selected_row.get(cols.get("secao", ""))
-            data_val = selected_row.get(cols.get("data", ""))
-            try:
-                data_str = pd.to_datetime(data_val).strftime("%d/%m/%Y") if pd.notna(data_val) else "N/A"
-            except:
-                data_str = str(data_val)
-            
-            st.success(f"📌 **Selecionado:** Seção '{secao_val}' - Data: {data_str}")
-        
+
         display_df = fdf.copy()
-    
+
         # Garante formato dd/mm/aaaa
         if cols.get("data") and cols["data"] in display_df.columns:
             display_df["Data formatada"] = pd.to_datetime(display_df[cols["data"]], errors="coerce").dt.strftime("%d/%m/%Y")
         else:
             display_df["Data formatada"] = None
-    
+
         # Remove a primeira coluna se for puramente numérica (apenas na exibição)
         if display_df.columns.size > 0:
             first_col = display_df.columns[0]
@@ -799,7 +674,7 @@ def main():
                     display_df = display_df.drop(columns=first_col)
             except Exception:
                 pass
-    
+
         # Define as colunas a exibir na tabela
         table_cols = [
             "Data formatada",
@@ -810,7 +685,7 @@ def main():
             cols.get("obs"),
         ]
         table_cols = [c for c in table_cols if c in display_df.columns and c is not None]
-    
+
         if table_cols:
             renamed = {
                 "Data formatada": "Data da Medição",
@@ -820,59 +695,18 @@ def main():
                 cols.get("vazao"," "): "Vazão (L/s)",
                 cols.get("obs"," "): "Observações",
             }
-            
-            # Criar DataFrame para exibição
-            display_df_renamed = display_df[table_cols].rename(columns=renamed)
-            
-            # Exibir tabela simples
             st.dataframe(
-                display_df_renamed,
+                display_df[table_cols].rename(columns=renamed),
                 use_container_width=True,
                 height=555
             )
-            
-            # Seleção simplificada - selecionar por número
-            if len(display_df_renamed) > 0:
-                st.markdown("---")
-                st.markdown("**🔍 Selecionar linha específica:**")
-                
-                # Criar opções para seleção
-                options = ["-- Selecione uma linha --"] + [
-                    f"Linha {i+1}: {row['Seção'] if 'Seção' in row else 'N/A'} ({row['Data da Medição'] if 'Data da Medição' in row else 'N/A'})"
-                    for i, (_, row) in enumerate(display_df_renamed.iterrows())
-                ]
-                
-                selected_option = st.selectbox(
-                    "Escolha uma linha para selecionar:",
-                    options=options,
-                    key="row_selector"
-                )
-                
-                if selected_option != "-- Selecione uma linha --":
-                    # Extrair número da linha da opção selecionada
-                    import re
-                    match = re.search(r'Linha (\d+):', selected_option)
-                    if match:
-                        row_num = int(match.group(1)) - 1  # Converter para índice 0-based
-                        if 0 <= row_num < len(fdf):
-                            original_index = fdf.iloc[row_num].name
-                            
-                            # Botão para confirmar seleção
-                            if st.button("✅ Confirmar seleção", type="primary"):
-                                st.session_state.selected_row_index = original_index
-                                st.rerun()
         else:
             st.warning("⚠️ Não encontrei as colunas necessárias para a tabela solicitada.")
 
     # ---------- Galeria de mídias ----------
     with col_media:
         st.markdown("**🖼️ Galeria de Mídias**")
-        
-        # Botão para limpar seleção
-        if st.button("🗑️ Limpar Seleção", type="secondary", key="clear_gallery"):
-            st.session_state.selected_row_index = -1
-            st.rerun()
-        
+
         media_map = {
             "Foto Principal": cols.get("foto1"),
             "Foto (02)":     cols.get("foto2"),
@@ -886,17 +720,14 @@ def main():
             choice = st.selectbox("**Selecione o tipo de mídia**", valid_options, index=0)
 
             def split_urls(cell: str):
-                if not isinstance(cell, str):
-                    return []
                 parts = re.split(r"[,\n; ]+", cell.strip())
                 return [p.strip() for p in parts if p.strip().lower().startswith(("http://","https://"))]
 
             items = []
-            row_indices = []  # Armazenar índices das linhas correspondentes
             seen = set()
             cname = media_map[choice]
 
-            for idx, row in fdf.iterrows():
+            for _, row in fdf.iterrows():
                 cell = row.get(cname)
                 if not isinstance(cell, str):
                     continue
@@ -906,11 +737,9 @@ def main():
                 caption = " • ".join([x for x in [str(rlab) if rlab else None, str(slab) if slab else None] if x])
 
                 for u in split_urls(cell):
-                    # Criar uma chave única para evitar duplicatas
-                    key = f"{u}_{idx}"
-                    if key in seen:
+                    if u in seen:
                         continue
-                    seen.add(key)
+                    seen.add(u)
 
                     if "Video" in choice:
                         fid = gdrive_extract_id(u)
@@ -918,63 +747,29 @@ def main():
                             thumb, _ = drive_image_urls(fid)
                             src = drive_video_embed(fid)
                             items.append({"thumb": thumb, "src": src, "caption": caption, "iframe": True})
-                            row_indices.append(idx)
                         else:
                             items.append({"thumb": u, "src": u, "caption": caption, "iframe": True})
-                            row_indices.append(idx)
                     else:
                         fid = gdrive_extract_id(u)
                         if fid:
                             thumb, big = drive_image_urls(fid)
                             items.append({"thumb": thumb, "src": big, "caption": caption, "iframe": False})
-                            row_indices.append(idx)
                         else:
                             items.append({"thumb": u, "src": u, "caption": caption, "iframe": False})
-                            row_indices.append(idx)
 
             if items:
-                # Botões de ação quando há uma linha selecionada
-                if st.session_state.selected_row_index >= 0:
-                    col_btn1, col_btn2 = st.columns(2)
-                    with col_btn1:
-                        if st.button("📍 Ir para linha na tabela", use_container_width=True):
-                            # O JavaScript já rola para a tabela
-                            st.rerun()
-                    with col_btn2:
-                        if st.button("🗺️ Mostrar no mapa", use_container_width=True):
-                            st.info("Funcionalidade de foco no mapa será implementada")
-                
-                render_lightgallery_mixed(items, height_px=470, row_indices=row_indices)
-                
-                # Monitorar mensagens do JavaScript
-                # Esta parte requer configuração adicional do Streamlit para comunicação bidirecional
-                # Por enquanto, usamos uma abordagem mais simples
-                
+                render_lightgallery_mixed(items, height_px=470)
             else:
                 st.info("📭 Sem mídias para exibir nessa coluna. Verifique se os links estão públicos no Drive.")
 
-# =========================
-# MAPA — Folium (wide)
-# =========================
-    # Obter o estado atual (já inicializado no sidebar)
-    sidebar_state = st.session_state.get('sidebar_state', {
-        "enable_fullscreen": False,
-        "enable_measure": False
-    })
-    
+    # =========================
+    # MAPA — Folium (wide)
+    # =========================
     st.markdown("---")
     st.subheader("🗺️ Mapa das Seções Monitoradas")
-    
-    # Mostrar status dos controles
-    if sidebar_state["enable_fullscreen"] or sidebar_state["enable_measure"]:
-        cols_status = st.columns(4)
-        if sidebar_state["enable_fullscreen"]:
-            cols_status[0].success("🗔 Tela Cheia: ✅ Ativado")
-        if sidebar_state["enable_measure"]:
-            cols_status[1].success("📏 Medição: ✅ Ativado")
-    
+
     fmap = folium.Map(location=[-5.199, -39.292], zoom_start=8, control_scale=True, prefer_canvas=True, tiles=None)
-    
+
     # Bases
     folium.TileLayer("CartoDB Positron", name="🗺️ CartoDB Positron").add_to(fmap)
     folium.TileLayer("OpenStreetMap", name="🌍 OpenStreetMap").add_to(fmap)
@@ -988,15 +783,15 @@ def main():
         name="🛰️ Esri World Imagery",
         attr="Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community"
     ).add_to(fmap)
-    
+
     # Grupos
     fg_bacia   = folium.FeatureGroup(name="🏞️ Bacia do Banabuiú", show=True)
     fg_trechos = folium.FeatureGroup(name="🌊 Trechos Perene", show=True)
     fg_pontos  = folium.FeatureGroup(name="📍 Pontos de Medição", show=True)
-    
+
     trechos = load_geojson_safe(*TRECHOS_CAND)
     bacia   = load_geojson_safe(*BACIA_CAND)
-    
+
     if trechos:
         GeoJson(
             trechos,
@@ -1005,7 +800,7 @@ def main():
             tooltip=GeoJsonTooltip(fields=[], aliases=[], sticky=False)
         ).add_to(fg_trechos)
         fg_trechos.add_to(fmap)
-    
+
     bacia_bounds = None
     if bacia:
         GeoJson(
@@ -1015,7 +810,7 @@ def main():
         ).add_to(fg_bacia)
         fg_bacia.add_to(fmap)
         bacia_bounds = geojson_bounds(bacia)
-    
+
     # Pontos
     lat_col = cols.get("lat")
     lon_col = cols.get("lon")
@@ -1026,17 +821,17 @@ def main():
             if isinstance(v, str): v = v.replace(",", ".")
             try: return float(v)
             except: return None
-    
+
         for _, row in fdf.iterrows():
             lat = to_float(row.get(lat_col))
             lon = to_float(row.get(lon_col))
             if lat is None or lon is None:
                 continue
-    
+
             popup_html = make_popup_html(row, cols)
             iframe = IFrame(html=popup_html, width=POPUP_WIDTH, height=POPUP_HEIGHT)
             popup = folium.Popup(iframe, max_width=POPUP_WIDTH)
-    
+
             if USE_ICON:
                 icon = CustomIcon(
                     icon_image=ICON_URL,
@@ -1057,34 +852,21 @@ def main():
                     popup=popup,
                     tooltip=f"📍 {str(row.get(cols.get('secao',''), 'Seção'))}",
                 ).add_to(fg_pontos)
-    
+
             pts.append((lat, lon))
-    
+
         fg_pontos.add_to(fmap)
-    
+
     # Fit
     if bacia_bounds:
         fmap.fit_bounds(bacia_bounds)
     elif pts:
         fmap.fit_bounds([[min(p[0] for p in pts), min(p[1] for p in pts)],
                          [max(p[0] for p in pts), max(p[1] for p in pts)]])
-    
-    # Controles de mapa
+
     LayerControl(collapsed=True, position="topright").add_to(fmap)
-    
-    # Adicionar controles de tela cheia e medição baseados no sidebar_state
-    if sidebar_state["enable_fullscreen"]:
-        Fullscreen(position='topleft').add_to(fmap)
-    if sidebar_state["enable_measure"]:
-        MeasureControl(
-            primary_length_unit="meters",
-            secondary_length_unit="kilometers",
-            primary_area_unit="hectares",
-            position='topleft'
-        ).add_to(fmap)
-    
     st_folium(fmap, height=MAP_HEIGHT, use_container_width=True)
-    
+
     # =========================
     # GRÁFICOS
     # =========================
@@ -1171,9 +953,6 @@ def main():
         <div style="text-align: center; color: #666; padding: 1rem;">
             <p>© 2024 Sistema de Monitoramento de Vazões • Desenvolvido com Python 🐍</p>
             <p style="font-size: 0.9em;">Streamlit + Folium + Altair + LightGallery</p>
-            <p style="font-size: 0.8em; margin-top: 1rem;">
-                <strong>Interatividade:</strong> Clique nas fotos para selecionar linhas na tabela • Use os controles no sidebar para ativar funcionalidades do mapa
-            </p>
         </div>
     """, unsafe_allow_html=True)
 
