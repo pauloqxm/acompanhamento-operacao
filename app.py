@@ -186,27 +186,47 @@ def drive_video_embed(file_id: str):
 
 def render_lightgallery_mixed(items: list, height_px=440, row_indices: list = None):
     """
-    items = [{ 'thumb':..., 'src':..., 'caption':..., 'iframe': bool }]
-    row_indices = lista de índices correspondentes no DataFrame (opcional)
+    Versão simplificada que funciona sem problemas de chave
     """
     if not items:
         st.info("Sem mídias para exibir.")
         return
 
+    # Primeiro, criar botões de seleção do Streamlit
+    if row_indices and any(idx >= 0 for idx in row_indices):
+        st.markdown("**📌 Selecione uma imagem:**")
+        
+        # Organizar em colunas
+        num_cols = 4
+        cols = st.columns(num_cols)
+        
+        for i, (item, row_idx) in enumerate(zip(items, row_indices)):
+            if row_idx >= 0:
+                with cols[i % num_cols]:
+                    # Mostrar miniatura e botão
+                    st.image(item["thumb"], use_column_width=True)
+                    
+                    # Botão para selecionar
+                    if st.button(f"Selecionar #{i+1}", 
+                                key=f"select_img_{i}",
+                                use_container_width=True):
+                        st.session_state.selected_row_index = row_idx
+                        st.rerun()
+        
+        st.markdown("---")
+    
+    # Agora renderizar a galeria LightGallery para visualização
     anchors = []
     for i, it in enumerate(items):
-        row_idx = row_indices[i] if row_indices and i < len(row_indices) else -1
-        data_attr = f'data-row-index="{row_idx}"' if row_idx >= 0 else ''
-        
         if it.get("iframe"):
             anchors.append(
-                f'''<a class="gallery-item" data-iframe="true" data-src="{it["src"]}" data-sub-html="{it.get("caption","")}" {data_attr}>
+                f'''<a class="gallery-item" data-iframe="true" data-src="{it["src"]}" data-sub-html="{it.get("caption","")}">
                         <img src="{it["thumb"]}" loading="lazy"/>
                     </a>'''
             )
         else:
             anchors.append(
-                f'''<a class="gallery-item" href="{it["src"]}" data-sub-html="{it.get("caption","")}" {data_attr}>
+                f'''<a class="gallery-item" href="{it["src"]}" data-sub-html="{it.get("caption","")}">
                         <img src="{it["thumb"]}" loading="lazy"/>
                     </a>'''
             )
@@ -217,7 +237,13 @@ def render_lightgallery_mixed(items: list, height_px=440, row_indices: list = No
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lightgallery@2.7.2/css/lightgallery-bundle.min.css">
     <style>
       .lg-backdrop {{ background: rgba(0,0,0,0.9); }}
-      .gallery-container {{ display:flex; flex-wrap: wrap; gap: 12px; align-items:flex-start; }}
+      .gallery-container {{ 
+          display: flex; 
+          flex-wrap: wrap; 
+          gap: 12px; 
+          align-items: flex-start;
+          justify-content: center;
+      }}
       .gallery-item img {{ 
           height: 140px; 
           width: auto; 
@@ -230,10 +256,6 @@ def render_lightgallery_mixed(items: list, height_px=440, row_indices: list = No
           transform: scale(1.05);
           box-shadow: 0 6px 16px rgba(0,0,0,.3);
       }}
-      .selected-item img {{
-          border: 4px solid #27ae60 !important;
-          box-shadow: 0 0 15px rgba(39, 174, 96, 0.7) !important;
-      }}
     </style>
 
     <div id="lg-mixed" class="gallery-container">{items_html}</div>
@@ -244,65 +266,8 @@ def render_lightgallery_mixed(items: list, height_px=440, row_indices: list = No
     <script src="https://cdn.jsdelivr.net/npm/lightgallery@2.7.2/plugins/video/lg-video.umd.js"></script>
 
     <script>
-      // Função para enviar seleção para o Streamlit
-      function sendSelectionToStreamlit(rowIndex) {{
-          // Usando o método de comunicação do Streamlit
-          if (window.parent) {{
-              window.parent.postMessage({{
-                  type: 'streamlit:setComponentValue',
-                  data: {{
-                      action: 'gallery_click',
-                      rowIndex: rowIndex,
-                      timestamp: Date.now()
-                  }}
-              }}, '*');
-          }}
-      }}
-      
-      // Função para processar clique na galeria
-      function handleGalleryClick(event) {{
-          const item = event.currentTarget;
-          const rowIndex = item.getAttribute('data-row-index');
-          
-          if (rowIndex && rowIndex !== "-1") {{
-              // Remover seleção anterior
-              document.querySelectorAll('.gallery-item').forEach(el => {{
-                  el.classList.remove('selected-item');
-              }});
-              
-              // Adicionar seleção atual
-              item.classList.add('selected-item');
-              
-              // Enviar para Streamlit
-              sendSelectionToStreamlit(parseInt(rowIndex));
-              
-              // Rolar para a tabela (opcional)
-              const tableElement = document.querySelector('[data-testid="stDataFrame"]');
-              if (tableElement) {{
-                  tableElement.scrollIntoView({{ behavior: 'smooth', block: 'center' }});
-              }}
-          }}
-      }}
-      
       window.addEventListener('load', () => {{
         const container = document.getElementById('lg-mixed');
-        
-        // Adicionar event listeners para cada item
-        const galleryItems = container.querySelectorAll('.gallery-item');
-        galleryItems.forEach(item => {{
-            item.addEventListener('click', handleGalleryClick);
-        }});
-        
-        // Se houver uma seleção prévia, destacar o item correspondente
-        const selectedRowIndex = {st.session_state.get('selected_row_index', -1)};
-        if (selectedRowIndex >= 0) {{
-            const selectedItem = container.querySelector(`[data-row-index="${{selectedRowIndex}}"]`);
-            if (selectedItem) {{
-                selectedItem.classList.add('selected-item');
-            }}
-        }}
-        
-        // Inicializar LightGallery
         lightGallery(container, {{
           selector: '.gallery-item',
           zoom: true,
@@ -316,11 +281,8 @@ def render_lightgallery_mixed(items: list, height_px=440, row_indices: list = No
     </script>
     """
     
-    # Criar um componente com uma chave única
-    component_key = f"lightgallery_{uuid.uuid4().hex[:8]}"
-    result = components.html(html, height=height_px, scrolling=True, key=component_key)
-    
-    return result
+    # Renderizar sem a chave que estava causando problemas
+    components.html(html, height=height_px, scrolling=False)
 
 #=====================================================================
 # POPUP estilizado
