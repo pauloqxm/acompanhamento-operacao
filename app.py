@@ -799,6 +799,7 @@ def main():
     st.subheader("📋 Dados e Mídias")
     col_tab, col_media = st.columns([1, 1])
 
+# ---------- Tabela ----------
     # ---------- Tabela ----------
     with col_tab:
         st.markdown("**📊 Tabela de Registros**")
@@ -821,13 +822,13 @@ def main():
             st.success(f"📌 **Selecionado:** Seção '{secao_val}' - Data: {data_str}")
         
         display_df = fdf.copy()
-
+    
         # Garante formato dd/mm/aaaa
         if cols.get("data") and cols["data"] in display_df.columns:
             display_df["Data formatada"] = pd.to_datetime(display_df[cols["data"]], errors="coerce").dt.strftime("%d/%m/%Y")
         else:
             display_df["Data formatada"] = None
-
+    
         # Remove a primeira coluna se for puramente numérica (apenas na exibição)
         if display_df.columns.size > 0:
             first_col = display_df.columns[0]
@@ -836,7 +837,7 @@ def main():
                     display_df = display_df.drop(columns=first_col)
             except Exception:
                 pass
-
+    
         # Define as colunas a exibir na tabela
         table_cols = [
             "Data formatada",
@@ -847,7 +848,7 @@ def main():
             cols.get("obs"),
         ]
         table_cols = [c for c in table_cols if c in display_df.columns and c is not None]
-
+    
         if table_cols:
             renamed = {
                 "Data formatada": "Data da Medição",
@@ -861,22 +862,43 @@ def main():
             # Criar DataFrame para exibição
             display_df_renamed = display_df[table_cols].rename(columns=renamed)
             
-            # Configurar seleção na tabela
-            selection = st.dataframe(
+            # Exibir tabela simples
+            st.dataframe(
                 display_df_renamed,
                 use_container_width=True,
-                height=555,
-                key="table_selection"
+                height=555
             )
             
-            # Verificar se houve seleção na tabela
-            if selection and selection.get('selection', {}).get('rows'):
-                selected_idx = selection['selection']['rows'][0]
-                if selected_idx < len(fdf):
-                    # Obter o índice original no DataFrame filtrado
-                    original_index = fdf.iloc[selected_idx].name
-                    st.session_state.selected_row_index = original_index
-                    st.rerun()
+            # Seleção simplificada - selecionar por número
+            if len(display_df_renamed) > 0:
+                st.markdown("---")
+                st.markdown("**🔍 Selecionar linha específica:**")
+                
+                # Criar opções para seleção
+                options = ["-- Selecione uma linha --"] + [
+                    f"Linha {i+1}: {row['Seção'] if 'Seção' in row else 'N/A'} ({row['Data da Medição'] if 'Data da Medição' in row else 'N/A'})"
+                    for i, (_, row) in enumerate(display_df_renamed.iterrows())
+                ]
+                
+                selected_option = st.selectbox(
+                    "Escolha uma linha para selecionar:",
+                    options=options,
+                    key="row_selector"
+                )
+                
+                if selected_option != "-- Selecione uma linha --":
+                    # Extrair número da linha da opção selecionada
+                    import re
+                    match = re.search(r'Linha (\d+):', selected_option)
+                    if match:
+                        row_num = int(match.group(1)) - 1  # Converter para índice 0-based
+                        if 0 <= row_num < len(fdf):
+                            original_index = fdf.iloc[row_num].name
+                            
+                            # Botão para confirmar seleção
+                            if st.button("✅ Confirmar seleção", type="primary"):
+                                st.session_state.selected_row_index = original_index
+                                st.rerun()
         else:
             st.warning("⚠️ Não encontrei as colunas necessárias para a tabela solicitada.")
 
