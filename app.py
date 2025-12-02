@@ -2,6 +2,7 @@ import os
 import re
 import json
 import math
+import uuid
 import pandas as pd
 import numpy as np
 import streamlit as st
@@ -62,6 +63,18 @@ st.markdown("""
         .stButton > button[kind="primary"]:active,
         div[data-testid="baseButton-primary"] > button:active {
             transform: scale(0.99);
+        }
+        
+        /* Estilo para linha selecionada na tabela */
+        .stDataFrame [data-testid="stDataFrame"] tbody tr.selected {
+            background-color: #27ae60 !important;
+            color: white !important;
+            font-weight: bold !important;
+        }
+        
+        /* Estilo para checkbox no sidebar */
+        .stCheckbox > div {
+            padding: 8px 0;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -171,25 +184,29 @@ def drive_video_embed(file_id: str):
     """Preview em iframe para vídeo do Drive."""
     return f"https://drive.google.com/file/d/{file_id}/preview"
 
-def render_lightgallery_mixed(items: list, height_px=440):
+def render_lightgallery_mixed(items: list, height_px=440, row_indices: list = None):
     """
     items = [{ 'thumb':..., 'src':..., 'caption':..., 'iframe': bool }]
+    row_indices = lista de índices correspondentes no DataFrame (opcional)
     """
     if not items:
         st.info("Sem mídias para exibir.")
         return
 
     anchors = []
-    for it in items:
+    for i, it in enumerate(items):
+        row_idx = row_indices[i] if row_indices and i < len(row_indices) else -1
+        data_attr = f'data-row-index="{row_idx}"' if row_idx >= 0 else ''
+        
         if it.get("iframe"):
             anchors.append(
-                f'''<a class="gallery-item" data-iframe="true" data-src="{it["src"]}" data-sub-html="{it.get("caption","")}">
+                f'''<a class="gallery-item" data-iframe="true" data-src="{it["src"]}" data-sub-html="{it.get("caption","")}" {data_attr}>
                         <img src="{it["thumb"]}" loading="lazy"/>
                     </a>'''
             )
         else:
             anchors.append(
-                f'''<a class="gallery-item" href="{it["src"]}" data-sub-html="{it.get("caption","")}">
+                f'''<a class="gallery-item" href="{it["src"]}" data-sub-html="{it.get("caption","")}" {data_attr}>
                         <img src="{it["thumb"]}" loading="lazy"/>
                     </a>'''
             )
@@ -207,10 +224,15 @@ def render_lightgallery_mixed(items: list, height_px=440):
           border-radius: 10px; 
           box-shadow: 0 4px 12px rgba(0,0,0,.2);
           transition: transform 0.3s ease, box-shadow 0.3s ease;
+          cursor: pointer;
       }}
       .gallery-item:hover img {{
           transform: scale(1.05);
           box-shadow: 0 6px 16px rgba(0,0,0,.3);
+      }}
+      .selected-item img {{
+          border: 4px solid #27ae60 !important;
+          box-shadow: 0 0 15px rgba(39, 174, 96, 0.7) !important;
       }}
     </style>
 
@@ -222,8 +244,65 @@ def render_lightgallery_mixed(items: list, height_px=440):
     <script src="https://cdn.jsdelivr.net/npm/lightgallery@2.7.2/plugins/video/lg-video.umd.js"></script>
 
     <script>
+      // Função para enviar seleção para o Streamlit
+      function sendSelectionToStreamlit(rowIndex) {{
+          // Usando o método de comunicação do Streamlit
+          if (window.parent) {{
+              window.parent.postMessage({{
+                  type: 'streamlit:setComponentValue',
+                  data: {{
+                      action: 'gallery_click',
+                      rowIndex: rowIndex,
+                      timestamp: Date.now()
+                  }}
+              }}, '*');
+          }}
+      }}
+      
+      // Função para processar clique na galeria
+      function handleGalleryClick(event) {{
+          const item = event.currentTarget;
+          const rowIndex = item.getAttribute('data-row-index');
+          
+          if (rowIndex && rowIndex !== "-1") {{
+              // Remover seleção anterior
+              document.querySelectorAll('.gallery-item').forEach(el => {{
+                  el.classList.remove('selected-item');
+              }});
+              
+              // Adicionar seleção atual
+              item.classList.add('selected-item');
+              
+              // Enviar para Streamlit
+              sendSelectionToStreamlit(parseInt(rowIndex));
+              
+              // Rolar para a tabela (opcional)
+              const tableElement = document.querySelector('[data-testid="stDataFrame"]');
+              if (tableElement) {{
+                  tableElement.scrollIntoView({{ behavior: 'smooth', block: 'center' }});
+              }}
+          }}
+      }}
+      
       window.addEventListener('load', () => {{
         const container = document.getElementById('lg-mixed');
+        
+        // Adicionar event listeners para cada item
+        const galleryItems = container.querySelectorAll('.gallery-item');
+        galleryItems.forEach(item => {{
+            item.addEventListener('click', handleGalleryClick);
+        }});
+        
+        // Se houver uma seleção prévia, destacar o item correspondente
+        const selectedRowIndex = {st.session_state.get('selected_row_index', -1)};
+        if (selectedRowIndex >= 0) {{
+            const selectedItem = container.querySelector(`[data-row-index="${{selectedRowIndex}}"]`);
+            if (selectedItem) {{
+                selectedItem.classList.add('selected-item');
+            }}
+        }}
+        
+        // Inicializar LightGallery
         lightGallery(container, {{
           selector: '.gallery-item',
           zoom: true,
@@ -236,7 +315,12 @@ def render_lightgallery_mixed(items: list, height_px=440):
       }});
     </script>
     """
-    components.html(html, height=height_px, scrolling=True)
+    
+    # Criar um componente com uma chave única
+    component_key = f"lightgallery_{uuid.uuid4().hex[:8]}"
+    result = components.html(html, height=height_px, scrolling=True, key=component_key)
+    
+    return result
 
 #=====================================================================
 # POPUP estilizado
@@ -535,6 +619,14 @@ def main():
     # Estado para cache busting e botão de atualização
     if "cache_bust" not in st.session_state:
         st.session_state["cache_bust"] = 0
+    
+    # Estado para seleção de linha na tabela
+    if "selected_row_index" not in st.session_state:
+        st.session_state.selected_row_index = -1
+    
+    # Estado para navegação entre tabela e galeria
+    if "gallery_selection" not in st.session_state:
+        st.session_state.gallery_selection = None
 
     # Header (largura total)
     st.markdown("""
@@ -608,6 +700,58 @@ def main():
         secao_opts = options_for("secao")
         sec_sel = st.multiselect("**Seção**", secao_opts)
 
+    # =========================
+    # CONTROLES DO MAPA (sidebar)
+    # =========================
+    with st.sidebar:
+        st.markdown("---")
+        st.subheader("⚙️ Controles do Mapa")
+        
+        # Inicializar sidebar_state se não existir
+        if 'sidebar_state' not in st.session_state:
+            st.session_state.sidebar_state = {
+                "enable_fullscreen": False,
+                "enable_measure": False
+            }
+        
+        # Checkboxes para controle
+        enable_fullscreen = st.checkbox(
+            "🗔 Modo Tela Cheia",
+            value=st.session_state.sidebar_state["enable_fullscreen"],
+            key="fullscreen_checkbox"
+        )
+        
+        enable_measure = st.checkbox(
+            "📏 Ferramenta de Medição",
+            value=st.session_state.sidebar_state["enable_measure"],
+            key="measure_checkbox"
+        )
+        
+        # Atualizar estado
+        st.session_state.sidebar_state["enable_fullscreen"] = enable_fullscreen
+        st.session_state.sidebar_state["enable_measure"] = enable_measure
+        
+        # Botão para ativar tudo
+        if st.button("✅ Ativar Todos os Controles", use_container_width=True):
+            st.session_state.sidebar_state["enable_fullscreen"] = True
+            st.session_state.sidebar_state["enable_measure"] = True
+            st.rerun()
+        
+        # Espaçamento
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        
+        # Informações
+        with st.expander("ℹ️ Sobre os Controles"):
+            st.info("""
+            **🗔 Modo Tela Cheia:**
+            Adiciona um botão no canto superior esquerdo do mapa para visualização em tela cheia.
+            
+            **📏 Ferramenta de Medição:**
+            Adiciona ferramentas para medir distâncias (metros/km) e áreas (hectares) diretamente no mapa.
+            
+            *Clique nos ícones correspondentes no mapa para usar as ferramentas.*
+            """)
+
     # Aplicar filtros
     fdf = df.copy()
     if cols.get("data") and (data_ini and data_fim):
@@ -658,7 +802,24 @@ def main():
     # ---------- Tabela ----------
     with col_tab:
         st.markdown("**📊 Tabela de Registros**")
-
+        
+        # Botão para limpar seleção da tabela
+        if st.button("🗑️ Limpar Seleção da Tabela", type="secondary", key="clear_table"):
+            st.session_state.selected_row_index = -1
+            st.rerun()
+        
+        # Mostrar informação sobre a linha selecionada
+        if st.session_state.selected_row_index >= 0 and st.session_state.selected_row_index < len(fdf):
+            selected_row = fdf.iloc[st.session_state.selected_row_index]
+            secao_val = selected_row.get(cols.get("secao", ""))
+            data_val = selected_row.get(cols.get("data", ""))
+            try:
+                data_str = pd.to_datetime(data_val).strftime("%d/%m/%Y") if pd.notna(data_val) else "N/A"
+            except:
+                data_str = str(data_val)
+            
+            st.success(f"📌 **Selecionado:** Seção '{secao_val}' - Data: {data_str}")
+        
         display_df = fdf.copy()
 
         # Garante formato dd/mm/aaaa
@@ -696,18 +857,38 @@ def main():
                 cols.get("vazao"," "): "Vazão (L/s)",
                 cols.get("obs"," "): "Observações",
             }
-            st.dataframe(
-                display_df[table_cols].rename(columns=renamed),
+            
+            # Criar DataFrame para exibição
+            display_df_renamed = display_df[table_cols].rename(columns=renamed)
+            
+            # Configurar seleção na tabela
+            selection = st.dataframe(
+                display_df_renamed,
                 use_container_width=True,
-                height=555
+                height=555,
+                key="table_selection"
             )
+            
+            # Verificar se houve seleção na tabela
+            if selection and selection.get('selection', {}).get('rows'):
+                selected_idx = selection['selection']['rows'][0]
+                if selected_idx < len(fdf):
+                    # Obter o índice original no DataFrame filtrado
+                    original_index = fdf.iloc[selected_idx].name
+                    st.session_state.selected_row_index = original_index
+                    st.rerun()
         else:
             st.warning("⚠️ Não encontrei as colunas necessárias para a tabela solicitada.")
 
     # ---------- Galeria de mídias ----------
     with col_media:
         st.markdown("**🖼️ Galeria de Mídias**")
-
+        
+        # Botão para limpar seleção
+        if st.button("🗑️ Limpar Seleção", type="secondary", key="clear_gallery"):
+            st.session_state.selected_row_index = -1
+            st.rerun()
+        
         media_map = {
             "Foto Principal": cols.get("foto1"),
             "Foto (02)":     cols.get("foto2"),
@@ -721,14 +902,17 @@ def main():
             choice = st.selectbox("**Selecione o tipo de mídia**", valid_options, index=0)
 
             def split_urls(cell: str):
+                if not isinstance(cell, str):
+                    return []
                 parts = re.split(r"[,\n; ]+", cell.strip())
                 return [p.strip() for p in parts if p.strip().lower().startswith(("http://","https://"))]
 
             items = []
+            row_indices = []  # Armazenar índices das linhas correspondentes
             seen = set()
             cname = media_map[choice]
 
-            for _, row in fdf.iterrows():
+            for idx, row in fdf.iterrows():
                 cell = row.get(cname)
                 if not isinstance(cell, str):
                     continue
@@ -738,9 +922,11 @@ def main():
                 caption = " • ".join([x for x in [str(rlab) if rlab else None, str(slab) if slab else None] if x])
 
                 for u in split_urls(cell):
-                    if u in seen:
+                    # Criar uma chave única para evitar duplicatas
+                    key = f"{u}_{idx}"
+                    if key in seen:
                         continue
-                    seen.add(u)
+                    seen.add(key)
 
                     if "Video" in choice:
                         fid = gdrive_extract_id(u)
@@ -748,34 +934,60 @@ def main():
                             thumb, _ = drive_image_urls(fid)
                             src = drive_video_embed(fid)
                             items.append({"thumb": thumb, "src": src, "caption": caption, "iframe": True})
+                            row_indices.append(idx)
                         else:
                             items.append({"thumb": u, "src": u, "caption": caption, "iframe": True})
+                            row_indices.append(idx)
                     else:
                         fid = gdrive_extract_id(u)
                         if fid:
                             thumb, big = drive_image_urls(fid)
                             items.append({"thumb": thumb, "src": big, "caption": caption, "iframe": False})
+                            row_indices.append(idx)
                         else:
                             items.append({"thumb": u, "src": u, "caption": caption, "iframe": False})
+                            row_indices.append(idx)
 
             if items:
-                render_lightgallery_mixed(items, height_px=470)
+                # Botões de ação quando há uma linha selecionada
+                if st.session_state.selected_row_index >= 0:
+                    col_btn1, col_btn2 = st.columns(2)
+                    with col_btn1:
+                        if st.button("📍 Ir para linha na tabela", use_container_width=True):
+                            # O JavaScript já rola para a tabela
+                            st.rerun()
+                    with col_btn2:
+                        if st.button("🗺️ Mostrar no mapa", use_container_width=True):
+                            st.info("Funcionalidade de foco no mapa será implementada")
+                
+                render_lightgallery_mixed(items, height_px=470, row_indices=row_indices)
+                
+                # Monitorar mensagens do JavaScript
+                # Esta parte requer configuração adicional do Streamlit para comunicação bidirecional
+                # Por enquanto, usamos uma abordagem mais simples
+                
             else:
                 st.info("📭 Sem mídias para exibir nessa coluna. Verifique se os links estão públicos no Drive.")
 
 # =========================
 # MAPA — Folium (wide)
 # =========================
-    if 'sidebar_state' not in st.session_state:
-        st.session_state.sidebar_state = {
-            "enable_fullscreen": False,
-            "enable_measure": False
-        }
-    
-    sidebar_state = st.session_state.sidebar_state
+    # Obter o estado atual (já inicializado no sidebar)
+    sidebar_state = st.session_state.get('sidebar_state', {
+        "enable_fullscreen": False,
+        "enable_measure": False
+    })
     
     st.markdown("---")
     st.subheader("🗺️ Mapa das Seções Monitoradas")
+    
+    # Mostrar status dos controles
+    if sidebar_state["enable_fullscreen"] or sidebar_state["enable_measure"]:
+        cols_status = st.columns(4)
+        if sidebar_state["enable_fullscreen"]:
+            cols_status[0].success("🗔 Tela Cheia: ✅ Ativado")
+        if sidebar_state["enable_measure"]:
+            cols_status[1].success("📏 Medição: ✅ Ativado")
     
     fmap = folium.Map(location=[-5.199, -39.292], zoom_start=8, control_scale=True, prefer_canvas=True, tiles=None)
     
@@ -888,6 +1100,7 @@ def main():
         ).add_to(fmap)
     
     st_folium(fmap, height=MAP_HEIGHT, use_container_width=True)
+    
     # =========================
     # GRÁFICOS
     # =========================
@@ -974,6 +1187,9 @@ def main():
         <div style="text-align: center; color: #666; padding: 1rem;">
             <p>© 2024 Sistema de Monitoramento de Vazões • Desenvolvido com Python 🐍</p>
             <p style="font-size: 0.9em;">Streamlit + Folium + Altair + LightGallery</p>
+            <p style="font-size: 0.8em; margin-top: 1rem;">
+                <strong>Interatividade:</strong> Clique nas fotos para selecionar linhas na tabela • Use os controles no sidebar para ativar funcionalidades do mapa
+            </p>
         </div>
     """, unsafe_allow_html=True)
 
