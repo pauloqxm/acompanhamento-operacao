@@ -762,14 +762,14 @@ def main():
             else:
                 st.info("📭 Sem mídias para exibir nessa coluna. Verifique se os links estão públicos no Drive.")
 
-    # =========================
-    # MAPA — Folium (wide)
-    # =========================
+# =========================
+# MAPA — Folium (wide)
+# =========================
     st.markdown("---")
     st.subheader("🗺️ Mapa das Seções Monitoradas")
-
+    
     fmap = folium.Map(location=[-5.199, -39.292], zoom_start=8, control_scale=True, prefer_canvas=True, tiles=None)
-
+    
     # Bases
     folium.TileLayer("CartoDB Positron", name="🗺️ CartoDB Positron").add_to(fmap)
     folium.TileLayer("OpenStreetMap", name="🌍 OpenStreetMap").add_to(fmap)
@@ -783,15 +783,15 @@ def main():
         name="🛰️ Esri World Imagery",
         attr="Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community"
     ).add_to(fmap)
-
+    
     # Grupos
     fg_bacia   = folium.FeatureGroup(name="🏞️ Bacia do Banabuiú", show=True)
     fg_trechos = folium.FeatureGroup(name="🌊 Trechos Perene", show=True)
     fg_pontos  = folium.FeatureGroup(name="📍 Pontos de Medição", show=True)
-
+    
     trechos = load_geojson_safe(*TRECHOS_CAND)
     bacia   = load_geojson_safe(*BACIA_CAND)
-
+    
     if trechos:
         GeoJson(
             trechos,
@@ -800,7 +800,7 @@ def main():
             tooltip=GeoJsonTooltip(fields=[], aliases=[], sticky=False)
         ).add_to(fg_trechos)
         fg_trechos.add_to(fmap)
-
+    
     bacia_bounds = None
     if bacia:
         GeoJson(
@@ -810,7 +810,7 @@ def main():
         ).add_to(fg_bacia)
         fg_bacia.add_to(fmap)
         bacia_bounds = geojson_bounds(bacia)
-
+    
     # Pontos
     lat_col = cols.get("lat")
     lon_col = cols.get("lon")
@@ -821,17 +821,17 @@ def main():
             if isinstance(v, str): v = v.replace(",", ".")
             try: return float(v)
             except: return None
-
+    
         for _, row in fdf.iterrows():
             lat = to_float(row.get(lat_col))
             lon = to_float(row.get(lon_col))
             if lat is None or lon is None:
                 continue
-
+    
             popup_html = make_popup_html(row, cols)
             iframe = IFrame(html=popup_html, width=POPUP_WIDTH, height=POPUP_HEIGHT)
             popup = folium.Popup(iframe, max_width=POPUP_WIDTH)
-
+    
             if USE_ICON:
                 icon = CustomIcon(
                     icon_image=ICON_URL,
@@ -852,21 +852,33 @@ def main():
                     popup=popup,
                     tooltip=f"📍 {str(row.get(cols.get('secao',''), 'Seção'))}",
                 ).add_to(fg_pontos)
-
+    
             pts.append((lat, lon))
-
+    
         fg_pontos.add_to(fmap)
-
+    
     # Fit
     if bacia_bounds:
         fmap.fit_bounds(bacia_bounds)
     elif pts:
         fmap.fit_bounds([[min(p[0] for p in pts), min(p[1] for p in pts)],
                          [max(p[0] for p in pts), max(p[1] for p in pts)]])
-
+    
+    # Controles de mapa
     LayerControl(collapsed=True, position="topright").add_to(fmap)
+    
+    # Adicionar controles de tela cheia e medição baseados no sidebar_state
+    if sidebar_state["enable_fullscreen"]:
+        Fullscreen(position='topleft').add_to(fmap)
+    if sidebar_state["enable_measure"]:
+        MeasureControl(
+            primary_length_unit="meters",
+            secondary_length_unit="kilometers",
+            primary_area_unit="hectares",
+            position='topleft'
+        ).add_to(fmap)
+    
     st_folium(fmap, height=MAP_HEIGHT, use_container_width=True)
-
     # =========================
     # GRÁFICOS
     # =========================
