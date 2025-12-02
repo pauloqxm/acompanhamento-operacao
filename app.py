@@ -5,7 +5,6 @@ import math
 import pandas as pd
 import numpy as np
 import streamlit as st
-import Fullscreen, MeasureControl
 from datetime import datetime, date
 from zoneinfo import ZoneInfo
 
@@ -13,7 +12,7 @@ import folium
 from folium import GeoJson, GeoJsonTooltip, LayerControl
 from folium.features import CustomIcon
 from streamlit_folium import st_folium
-from folium.plugins
+from folium.plugins import Fullscreen, MeasureControl
 
 import altair as alt
 import streamlit.components.v1 as components
